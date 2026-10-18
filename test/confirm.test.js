@@ -92,6 +92,12 @@ test('approval is single-use and digest-bound', async () => {
     assert.equal(store.approvePlan(planId, digest, 'call-1'), true)
     assert.equal(store.approvePlan(planId, digest, 'call-2'), false, 'a replay must not approve again')
     assert.equal(store.getPlan(planId).status, 'approved')
+    const listed = store.listPlans(5)
+    assert.equal(listed.length, 1)
+    assert.equal(listed[0].id, planId)
+    assert.equal(listed[0].status, 'approved')
+    assert.equal(listed[0].opsCount, 1)
+    assert.equal(listed[0].digest, digest)
     store.raw.close()
   } finally {
     await fsp.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })

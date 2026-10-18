@@ -65,10 +65,10 @@ const ctx = {
 }
 
 const dispose = apply(ctx, { roots: [fixture], maxEntries: 1000, quarantineDir: path.join(fixture, '.quarantine'), probeDir: '' })
-assert.equal(definitions.length, 11, 'eleven tools must register')
+assert.equal(definitions.length, 14, 'fourteen tools must register')
 assert.deepEqual(
   definitions.map((definition) => definition.name),
-  ['af_backend', 'af_probe_write', 'af_scan', 'af_scan_report', 'af_files', 'af_duplicates', 'af_names', 'af_plan_create', 'af_plan_preview', 'af_plan_apply', 'af_plan_execute'],
+  ['af_backend', 'af_probe_write', 'af_scan', 'af_scan_report', 'af_files', 'af_duplicates', 'af_names', 'af_plan_create', 'af_plan_preview', 'af_plan_apply', 'af_plan_execute', 'af_plan_list', 'af_storage', 'af_plan_restore'],
 )
 
 const exec = () => ({
@@ -201,6 +201,30 @@ assert.equal(quarantinedFiles.length, plan.ops, 'every operation must leave exac
 const replayed = await call('af_plan_execute', { plan_id: plan.plan_id })
 assert.equal(replayed.ok, false, 'a committed plan must not execute twice')
 assert.ok(replayed.error.startsWith('AF_PLAN_NOT_PROPOSED'), replayed.error)
+
+const restorePlan = await call('af_plan_restore', { plan_id: plan.plan_id })
+assert.equal(restorePlan.ok, true, `af_plan_restore failed: ${restorePlan.error}`)
+assert.equal(restorePlan.ops, plan.ops, 'every operation must be restorable')
+assert.equal(restorePlan.skipped, 0)
+
+const restoreApproved = await call('af_plan_apply', { plan_id: restorePlan.plan_id })
+assert.equal(restoreApproved.authorized, true)
+const restored = await call('af_plan_execute', { plan_id: restorePlan.plan_id })
+assert.equal(restored.ok, true, `restore execute failed: ${restored.error}`)
+assert.equal(restored.committed, restorePlan.ops)
+assert.equal(fs.existsSync(path.join(fixture, '工具.apk（1）')), true, 'restore returns the file to its tree')
+console.log('--- af_plan_restore render ---')
+console.log(rendered.get('af_plan_restore'))
+
+const listed = await call('af_plan_list', { limit: 10 })
+assert.equal(listed.ok, true)
+assert.equal(listed.items.length, 2, 'the dedupe plan and its restore plan must both be listed')
+assert.ok(listed.items.some((item) => item.mode === 'restore'), 'the restore plan must be listed')
+console.log(rendered.get('af_plan_list'))
+
+const storage = await call('af_storage')
+assert.equal(storage.ok, true)
+console.log(rendered.get('af_storage'))
 
 dispose()
 fs.rmSync(fixture, { recursive: true, force: true })

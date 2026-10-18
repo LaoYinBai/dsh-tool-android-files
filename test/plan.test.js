@@ -11,6 +11,7 @@ import {
   assertPlanIntegrity,
 } from '../lib/plan.js'
 import { AfError, CODE } from '../lib/errors.js'
+import { RESTORE_POLICY, buildRestorePlan } from '../lib/plan.js'
 
 function member(id, name, extra = {}) {
   return {
@@ -135,4 +136,23 @@ test('the markdown body carries the digest and every operation', () => {
   const preview = markdown.split('\n').filter((line) => line.trim() !== '')
   assert.ok(preview[1].includes('项操作'), preview[1])
   assert.ok(preview[1].includes('移动'), preview[1])
+})
+
+test('a restore plan mirrors the quarantined files and keeps its own digest', () => {
+  const entries = [
+    { fileId: 2, quarantinePath: '/q/3/2_a.mp4', originalPath: '/d/a (1).mp4', size: 10, dev: '1', ino: '2', mtimeMs: 5, hash: 'h2' },
+    { fileId: 5, quarantinePath: '/q/3/5_b.mp4', originalPath: '/d/b.mp4', size: 20, dev: '1', ino: '5', mtimeMs: 6, hash: 'h5' },
+  ]
+  const built = buildRestorePlan(entries)
+  assert.equal(built.ops.length, 2)
+  assert.equal(built.ops[0].kind, 'restore')
+  assert.equal(built.ops[0].srcPath, '/q/3/2_a.mp4')
+  assert.equal(built.ops[0].dstPath, '/d/a (1).mp4')
+  assert.equal(built.plannedBytes, 30)
+  assert.deepEqual(built.policy, RESTORE_POLICY)
+
+  const restoreDigest = planDigest(9, 'restore', built.policy, built.ops)
+  const dedupeDigest = planDigest(9, 'dedupe', DEDUPE_POLICY, built.ops)
+  assert.notEqual(restoreDigest, dedupeDigest, 'mode is part of the digest')
+  assert.equal(planDigest(9, 'restore', built.policy, buildRestorePlan(entries).ops), restoreDigest)
 })
