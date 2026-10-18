@@ -65,10 +65,10 @@ const ctx = {
 }
 
 const dispose = apply(ctx, { roots: [fixture], maxEntries: 1000, quarantineDir: path.join(fixture, '.quarantine'), probeDir: '' })
-assert.equal(definitions.length, 14, 'fourteen tools must register')
+assert.equal(definitions.length, 15, 'fifteen tools must register')
 assert.deepEqual(
   definitions.map((definition) => definition.name),
-  ['af_backend', 'af_probe_write', 'af_scan', 'af_scan_report', 'af_files', 'af_duplicates', 'af_names', 'af_plan_create', 'af_plan_preview', 'af_plan_apply', 'af_plan_execute', 'af_plan_list', 'af_storage', 'af_plan_restore'],
+  ['af_backend', 'af_probe_write', 'af_scan', 'af_scan_report', 'af_files', 'af_duplicates', 'af_names', 'af_plan_create', 'af_plan_preview', 'af_plan_apply', 'af_plan_execute', 'af_plan_list', 'af_storage', 'af_plan_restore', 'af_plan_archive'],
 )
 
 const exec = () => ({
@@ -225,6 +225,32 @@ console.log(rendered.get('af_plan_list'))
 const storage = await call('af_storage')
 assert.equal(storage.ok, true)
 console.log(rendered.get('af_storage'))
+
+// Archive: top-level files only, hashes computed at execution time.
+const archive = await call('af_plan_archive', {})
+assert.equal(archive.ok, true, `af_plan_archive failed: ${archive.error}`)
+assert.equal(archive.ops, 7, 'seven unprotected top-level files')
+console.log('--- af_plan_archive render ---')
+console.log(rendered.get('af_plan_archive'))
+
+const archiveApproved = await call('af_plan_apply', { plan_id: archive.plan_id })
+assert.equal(archiveApproved.authorized, true)
+const archived = await call('af_plan_execute', { plan_id: archive.plan_id })
+assert.equal(archived.ok, true, `archive execute failed: ${archived.failures_text}`)
+assert.equal(archived.committed, 7)
+console.log(rendered.get('af_plan_execute'))
+
+assert.equal(fs.existsSync(path.join(fixture, 'photo.JPG')), false, 'the file left the root')
+const imageFolder = fs.readdirSync(path.join(fixture, '图片'))
+assert.equal(imageFolder.length, 1, 'one month bucket under 图片')
+assert.ok(fs.existsSync(path.join(fixture, '图片', imageFolder[0], 'photo.JPG')))
+assert.ok(fs.existsSync(path.join(fixture, 'iso.1')), 'protected files stay put')
+assert.ok(fs.existsSync(path.join(fixture, 'video.mp4.part')), 'partial downloads stay put')
+
+// Archiving again must do nothing: the moved files are no longer top-level.
+const again = await call('af_plan_archive', {})
+assert.equal(again.ok, false, 'a second archive plan has nothing to move')
+assert.ok(again.error.startsWith('AF_PLAN_EMPTY'), again.error)
 
 dispose()
 fs.rmSync(fixture, { recursive: true, force: true })

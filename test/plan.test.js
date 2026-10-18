@@ -11,7 +11,7 @@ import {
   assertPlanIntegrity,
 } from '../lib/plan.js'
 import { AfError, CODE } from '../lib/errors.js'
-import { RESTORE_POLICY, buildRestorePlan } from '../lib/plan.js'
+import { RESTORE_POLICY, buildRestorePlan, ARCHIVE_POLICY, archiveRelPath, buildArchivePlan } from '../lib/plan.js'
 
 function member(id, name, extra = {}) {
   return {
@@ -155,4 +155,33 @@ test('a restore plan mirrors the quarantined files and keeps its own digest', ()
   const dedupeDigest = planDigest(9, 'dedupe', DEDUPE_POLICY, built.ops)
   assert.notEqual(restoreDigest, dedupeDigest, 'mode is part of the digest')
   assert.equal(planDigest(9, 'restore', built.policy, buildRestorePlan(entries).ops), restoreDigest)
+})
+test('archive paths group by category then modification month', () => {
+  const ms = new Date(2026, 9, 18, 12).getTime()
+  assert.equal(archiveRelPath('image', ms, 'a.jpg'), '图片/2026-10/a.jpg')
+  assert.equal(archiveRelPath('installer', ms, 'x.apk'), '安装包/2026-10/x.apk')
+  assert.equal(archiveRelPath('other', ms, 'no-extension'), '其他/2026-10/no-extension')
+
+  const built = buildArchivePlan([{
+    fileId: 1,
+    root: '/r',
+    srcPath: '/r/a.jpg',
+    dstPath: '/r/图片/2026-10/a.jpg',
+    size: 5,
+    dev: '1',
+    ino: '2',
+    mtimeMs: ms,
+    hash: null,
+    category: 'image',
+  }])
+  assert.equal(built.ops.length, 1)
+  assert.equal(built.ops[0].kind, 'move')
+  assert.equal(built.ops[0].hash, null, 'archive ops carry no hash: it is computed at execution')
+  assert.equal(built.plannedBytes, 5)
+  assert.deepEqual(built.policy, ARCHIVE_POLICY)
+  assert.notEqual(
+    planDigest(3, 'archive', built.policy, built.ops),
+    planDigest(3, 'dedupe', built.policy, built.ops),
+    'mode is part of the digest',
+  )
 })

@@ -1,6 +1,6 @@
 # @laoyinbai/dsh-tool-android-files
 
-面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `0.6.2`：**M1 只读分析 + M2.1 计划与授权**。
+面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `0.7.0`：**M1 只读分析 + M2.1 计划与授权**。
 
 M1 能做的事：把指定目录**索引**到手机本地 SQLite，做分类、内容级去重、自动编号文件名识别、APK 结构检查，
 然后以**聚合数字**的形式向模型汇报。**不会移动、重命名、删除任何用户文件。**
@@ -107,6 +107,7 @@ rules:
 | `af_plan_execute` | **会移动文件** | 执行已 `approved` 的计划：逐项复核 `dev+ino+size+mtime+sha256` → 独占创建目标 → `fsync` → 回读校验 → 删除源 → `fsync` 目录。目标已存在或源已变化则**跳过该项并保留源**。每步落 journal。 |
 | `af_plan_list` | 无 | 列出计划 id / 模式 / 状态 / 操作数 / digest 前缀。指向旧扫描的 `proposed`/`approved` 计划标为 `stale`。 |
 | `af_storage` | 无 | 隔离区占用（按计划目录统计文件数与字节）与所在卷空间。**明确说明隔离不构成空间回收**。 |
+| `af_plan_archive` | 仅计划表 | 生成**归档计划**（`mode=archive`）：把扫描根目录**顶层**的文件按 `类别/年-月/` 归入子目录。子目录里的文件不动，保护文件跳过，目标已存在则在扩展名前取空闲编号，**绝不覆盖**。 |
 | `af_plan_restore` | 仅计划表 | 为已提交计划生成**恢复计划**（`mode=restore`）：把隔离文件搬回原路径。原路径被占用则跳过、绝不覆盖；搬回前重新哈希隔离副本。生成后同样要 `af_plan_apply` + `af_plan_execute`。 |
 
 工具名使用 `af_` 前缀并保持裸标识符形式（`^[a-z][a-z0-9_]*$`），兼容 PTC 代码模式。
@@ -160,7 +161,8 @@ npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.6.0.tgz
 | M1 | 索引扫描、分类、内容去重、编号名识别、SQLite 持久化、隐私裁剪 | 完成 |
 | M2 | 不可变计划 + digest、`userQuestions` plan-review 授权、独占复制 + 校验 + 删源、状态机、journal、重启核对 | **完成（0.3.0）** |
 | M3 | 恢复方案、空间统计、隔离区浏览（仍不开放永久清空） | **完成（0.4.0）**：`af_plan_restore` + `af_storage` + `af_plan_list`；永久清空依旧不提供 |
-| M4 | 计划生命周期（`source_plan_id` / `restored`）、方向正确的文案、空目录清理、故障注入与性能 | **进行中**：生命周期与文案已交付（0.5.0） |
+| M4 | 计划生命周期（`source_plan_id` / `restored`）、方向正确的文案、空目录清理、故障注入与性能 | **完成（0.6.x）**：真机故障注入与性能验收通过 |
+| M5 | 按类别 + 月份归档（`af_plan_archive`） | **本次交付（0.7.0）** |
 
 ## 10. 真机实测的写入语义（M2 设计依据）
 
