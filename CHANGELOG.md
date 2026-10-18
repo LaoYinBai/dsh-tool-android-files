@@ -3,6 +3,10 @@
 本文件记录面向用户的变更。版本遵循 `MAJOR.MINOR.PATCH`：MAJOR 表示计划格式或安全不变量变化，
 MINOR 表示新增操作类型或工具，PATCH 表示修复与文案。
 
+## 1.1.3
+
+把安装地址本身放在标题下方第一屏：`git+https://github.com/LaoYinBai/dsh-tool-android-files.git` 单独一个代码块，直接可复制。终端命令与 npm 说明随后。
+
 ## 1.1.2
 
 把 GitHub 安装命令提到 README 最前面，新用户不必先读完介绍才能开始装；详细步骤里的第一步改为指向该命令，避免重复。
