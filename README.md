@@ -4,18 +4,23 @@
 git+https://github.com/LaoYinBai/dsh-tool-android-files.git
 ```
 
-↑ **这一行就是安装地址。** 复制它，粘到 DSH 的插件安装框里；或者在终端里执行：
+↑ **这一行就是安装地址。**
 
-```sh
-NODE="$HOME/payload/runtime/bin/node"
-DSHBIN="$HOME/payload/dshroot/lib/node_modules/@deepseek-ai/dsh/lib/bin.js"
-
-"$NODE" "$DSHBIN" plugin --profile web add \
-  git+https://github.com/LaoYinBai/dsh-tool-android-files.git
-```
+**怎么装**：打开 DSH 的**插件管理页**（在设置里，名字可能是「插件」或「插件管理」），
+点「安装 / 添加插件」，把上面这一行粘进去，确认即可。
 
 装完还差两步：**配置要管理的目录**、**重启引擎**。往下看[安装（三步）](#安装三步)。
 
+> 如果你的 DSH 版本没有插件管理页，可以用命令行装，等价写法：
+>
+> ```sh
+> NODE="$HOME/payload/runtime/bin/node"
+> DSHBIN="$HOME/payload/dshroot/lib/node_modules/@deepseek-ai/dsh/lib/bin.js"
+>
+> "$NODE" "$DSHBIN" plugin --profile web add \
+>   git+https://github.com/LaoYinBai/dsh-tool-android-files.git
+> ```
+>
 > 为什么是 `git+https://` 而不是包名？因为还没发布到 npm。以后发布了，换成
 > `@laoyinbai/dsh-tool-android-files` 就行。
 
@@ -276,7 +281,7 @@ quarantine/
 ## 给开发者
 
 - **仓库**：https://github.com/LaoYinBai/dsh-tool-android-files
-- **版本**：`1.1.3`｜**许可**：MIT（见 [LICENSE](LICENSE)）
+- **版本**：`1.1.4`｜**许可**：MIT（见 [LICENSE](LICENSE)）
 - **结构**：纯 ESM，零运行时依赖，无构建步骤（`lib/` 就是源码，装到手机上直接跑）
 - **持久化**：`node:sqlite`（设备上没有编译器，也没有原生模块）
 - **测试**：83 个单元测试 + 一套用真实 DSH 编译器跑的冒烟测试；CI 在 Node 22/24 上执行
