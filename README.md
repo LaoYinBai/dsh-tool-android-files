@@ -1,6 +1,6 @@
 # @laoyinbai/dsh-tool-android-files
 
-面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `0.2.2`：**M1 只读分析 + M2.1 计划与授权**。
+面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `0.3.0`：**M1 只读分析 + M2.1 计划与授权**。
 
 M1 能做的事：把指定目录**索引**到手机本地 SQLite，做分类、内容级去重、自动编号文件名识别、APK 结构检查，
 然后以**聚合数字**的形式向模型汇报。**不会移动、重命名、删除任何用户文件。**
@@ -41,7 +41,7 @@ NODE="$HOME/payload/runtime/bin/node"
 
 # 方式 B：GitHub Release 预打包 tgz
 "$NODE" "$DSHBIN" plugin --profile web add \
-  https://github.com/LaoYinBai/dsh-tool-android-files/releases/download/v0.2.2/laoyinbai-dsh-tool-android-files-0.2.2.tgz
+  https://github.com/LaoYinBai/dsh-tool-android-files/releases/download/v0.3.0/laoyinbai-dsh-tool-android-files-0.3.0.tgz
 ```
 
 > 版本门禁：DSH 在加载前会校验 `peerDependencies` 里 `@deepseek-ai/dsh-*` 与运行时版本是否兼容。
@@ -103,7 +103,8 @@ rules:
 | `af_names` | 无 | 自动编号文件名发现：`(1)`/`（1）` 位置、规范名候选、APK 结构检查结果、冲突/待确认标记。 |
 | `af_plan_create` | 仅计划表 | 为一次扫描生成**不可变去重计划**：每组保留一份，其余移入隔离区。受保护的组整组跳过并计入 `skipped_groups/skipped_bytes`。返回 `plan_id + digest`。 |
 | `af_plan_preview` | 无 | 分页预览计划里的每一条操作（源、隔离目标、大小、原因），默认遮蔽路径。 |
-| `af_plan_apply` | 计划状态 | **只接受 `plan_id`**；重算并核对 digest 后，调 `ctx.userQuestions` 弹 plan-review 卡片；只有用户点 Approve 才把计划置为 `approved`（单次、CAS）。**本版本不移动文件**，返回 `executed=0`。 |
+| `af_plan_apply` | 计划状态 | **只接受 `plan_id`**；重算并核对 digest 后，调 `ctx.userQuestions` 弹 plan-review 卡片；只有用户点 Approve 才把计划置为 `approved`（单次、CAS）。**不移动文件**，返回 `executed=0`。 |
+| `af_plan_execute` | **会移动文件** | 执行已 `approved` 的计划：逐项复核 `dev+ino+size+mtime+sha256` → 独占创建目标 → `fsync` → 回读校验 → 删除源 → `fsync` 目录。目标已存在或源已变化则**跳过该项并保留源**。每步落 journal。 |
 
 工具名使用 `af_` 前缀并保持裸标识符形式（`^[a-z][a-z0-9_]*$`），兼容 PTC 代码模式。
 
@@ -143,7 +144,7 @@ rules:
 ```sh
 node --test          # 44 个单元测试（不需要任何依赖）
 npm run check        # 全部 lib 文件语法检查
-npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.2.2.tgz
+npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.3.0.tgz
 ```
 
 仓库内 `lib/` 即发布物，提交前请确认 `node --check` 与 `node --test` 均通过。
@@ -153,9 +154,9 @@ npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.2.2.tgz
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
-| M1 | 索引扫描、分类、内容去重、编号名识别、SQLite 持久化、隐私裁剪 | **本次交付** |
-| M2 | 不可变计划 + digest、`userQuestions` plan-review 授权、建目录/复制/移动/改名、状态机、中断核对 | **进行中**：计划引擎 + 授权链已交付（0.2.0）；执行器待做 |
-| M3 | 重复副本隔离、恢复方案、空间统计（仍不开放永久清空） | 未开始 |
+| M1 | 索引扫描、分类、内容去重、编号名识别、SQLite 持久化、隐私裁剪 | 完成 |
+| M2 | 不可变计划 + digest、`userQuestions` plan-review 授权、独占复制 + 校验 + 删源、状态机、journal、重启核对 | **完成（0.3.0）** |
+| M3 | 恢复方案、空间统计、隔离区浏览（仍不开放永久清空） | 未开始 |
 | M4 | 独立测试目录里的异常场景验收、性能与取消验证 | 未开始 |
 
 ## 10. 真机实测的写入语义（M2 设计依据）

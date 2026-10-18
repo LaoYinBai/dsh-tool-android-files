@@ -45,7 +45,7 @@ test('a v1 index upgrades to the current schema without losing rows', async () =
     const upgraded = await openStore(dbPath)
     try {
       const version = Number(upgraded.raw.prepare('PRAGMA user_version').get().user_version)
-      assert.equal(version, 3)
+      assert.equal(version, 4)
       const columns = upgraded.raw.prepare('PRAGMA table_info(files)').all().map((row) => row.name)
       assert.ok(columns.includes('protection'))
       assert.ok(

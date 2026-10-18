@@ -64,11 +64,11 @@ const ctx = {
   },
 }
 
-const dispose = apply(ctx, { roots: [fixture], maxEntries: 1000, quarantineDir: path.join(home, 'quarantine'), probeDir: '' })
-assert.equal(definitions.length, 10, 'ten tools must register')
+const dispose = apply(ctx, { roots: [fixture], maxEntries: 1000, quarantineDir: path.join(fixture, '.quarantine'), probeDir: '' })
+assert.equal(definitions.length, 11, 'eleven tools must register')
 assert.deepEqual(
   definitions.map((definition) => definition.name),
-  ['af_backend', 'af_probe_write', 'af_scan', 'af_scan_report', 'af_files', 'af_duplicates', 'af_names', 'af_plan_create', 'af_plan_preview', 'af_plan_apply'],
+  ['af_backend', 'af_probe_write', 'af_scan', 'af_scan_report', 'af_files', 'af_duplicates', 'af_names', 'af_plan_create', 'af_plan_preview', 'af_plan_apply', 'af_plan_execute'],
 )
 
 const exec = () => ({
@@ -183,6 +183,24 @@ console.log(rendered.get('af_plan_apply'))
 const replay = await call('af_plan_apply', { plan_id: plan.plan_id })
 assert.equal(replay.ok, false, 'a second approval must be refused')
 assert.ok(replay.error.startsWith('AF_PLAN_NOT_PROPOSED'), replay.error)
+
+const executed = await call('af_plan_execute', { plan_id: plan.plan_id })
+assert.equal(executed.ok, true, `af_plan_execute failed: ${executed.error}`)
+assert.equal(executed.committed, plan.ops, 'every operation must commit')
+assert.equal(executed.failed, 0)
+assert.equal(executed.status, 'committed')
+console.log('--- af_plan_execute render ---')
+console.log(rendered.get('af_plan_execute'))
+
+// The keeper stays, the quarantined twin is gone from the tree but present in quarantine.
+assert.equal(fs.existsSync(path.join(fixture, '工具.apk')), true, 'the keeper must stay')
+assert.equal(fs.existsSync(path.join(fixture, '工具.apk（1）')), false, 'the duplicate must leave the tree')
+const quarantined = path.join(fixture, '.quarantine', String(plan.plan_id))
+const quarantinedFiles = fs.readdirSync(quarantined)
+assert.equal(quarantinedFiles.length, plan.ops, 'every operation must leave exactly one file in quarantine')
+const replayed = await call('af_plan_execute', { plan_id: plan.plan_id })
+assert.equal(replayed.ok, false, 'a committed plan must not execute twice')
+assert.ok(replayed.error.startsWith('AF_PLAN_NOT_PROPOSED'), replayed.error)
 
 dispose()
 fs.rmSync(fixture, { recursive: true, force: true })
