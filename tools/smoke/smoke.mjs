@@ -57,10 +57,10 @@ const ctx = {
 }
 
 const dispose = apply(ctx, { roots: [fixture], maxEntries: 1000 })
-assert.equal(definitions.length, 6, 'six tools must register')
+assert.equal(definitions.length, 7, 'seven tools must register')
 assert.deepEqual(
   definitions.map((definition) => definition.name),
-  ['af_backend', 'af_scan', 'af_scan_report', 'af_files', 'af_duplicates', 'af_names'],
+  ['af_backend', 'af_probe_write', 'af_scan', 'af_scan_report', 'af_files', 'af_duplicates', 'af_names'],
 )
 
 const exec = () => ({
@@ -96,6 +96,14 @@ for (const field of ['ok=', 'plugin_version=', 'roots_configured=', 'roots_ready
   assert.ok(rendered.get('af_backend').includes(field), `af_backend render is missing ${field}`)
 }
 console.log(rendered.get('af_backend'))
+
+const probe = await call('af_probe_write')
+assert.equal(probe.ok, true, `af_probe_write failed: ${probe.error}`)
+assert.equal(probe.cleanup_ok, true, `probe left files behind: ${probe.checks_text}`)
+assert.ok(probe.checks_text.includes('exclusive_create'), 'probe must report exclusive_create')
+assert.equal(probe.shared_ran, false, 'no probeDir is configured in this fixture')
+console.log('--- af_probe_write render ---')
+console.log(rendered.get('af_probe_write'))
 
 const scan = await call('af_scan')
 assert.equal(scan.ok, true, `af_scan failed: ${scan.error}`)

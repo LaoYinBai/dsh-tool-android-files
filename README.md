@@ -1,11 +1,14 @@
 # @laoyinbai/dsh-tool-android-files
 
-面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `0.1.2`，处于 **M1：只读分析**。
+面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `0.1.3`，处于 **M1：只读分析**，外加 M2 的写入能力探测。
 
 M1 能做的事：把指定目录**索引**到手机本地 SQLite，做分类、内容级去重、自动编号文件名识别、APK 结构检查，
 然后以**聚合数字**的形式向模型汇报。**不会移动、重命名、删除任何用户文件。**
 
-M2 起才有写入能力（不可变计划 + 可信授权 + 隔离区 + 状态机），本版本不包含，也未注册任何写入工具。
+唯一的写操作是 `af_probe_write`：它只在插件自己的数据目录（以及你显式配置的 `probeDir`）里建几个临时文件，
+测完立刻删除并核对残留。它不碰任何用户文件。
+
+M2 的正式写入能力（不可变计划 + 可信授权 + 隔离区 + 状态机）尚未实现，也没有注册任何移动/改名/删除工具。
 
 ---
 
@@ -35,7 +38,7 @@ NODE="$HOME/payload/runtime/bin/node"
 
 # 方式 B：GitHub Release 预打包 tgz
 "$NODE" "$DSHBIN" plugin --profile web add \
-  https://github.com/LaoYinBai/dsh-tool-android-files/releases/download/v0.1.2/laoyinbai-dsh-tool-android-files-0.1.2.tgz
+  https://github.com/LaoYinBai/dsh-tool-android-files/releases/download/v0.1.3/laoyinbai-dsh-tool-android-files-0.1.3.tgz
 ```
 
 > 版本门禁：DSH 在加载前会校验 `peerDependencies` 里 `@deepseek-ai/dsh-*` 与运行时版本是否兼容。
@@ -65,6 +68,7 @@ NODE="$HOME/payload/runtime/bin/node"
 | `excludeExts` | `[]` | 跳过的扩展名（不含点）。 |
 | `excludePatterns` | `[]` | 只支持 `*` 的简单通配。 |
 | `rules` | `[]` | 追加在內建规则之后的分类规则，见下。 |
+| `probeDir` | '' | `af_probe_write` 在共享存储上做写入探测的目录。必须绝对路径且已存在；只有位于已配置根目录内（或 Android 上位于 `/storage/emulated/0/DeepSeekHarness` 内）才会被采用。 |
 | `enableWrite` | — | M2 保留位。本版本忽略并给出提示。 |
 
 规则对象可用的条件（**全部满足**才算命中，按数组顺序首条命中生效）：
@@ -86,7 +90,8 @@ rules:
 
 | 工具 | 副作用 | 说明 |
 |---|---|---|
-| `af_backend` | 仅插件目录 | 报告平台、Node/SQLite 版本、索引库位置与可写性、配置的根目录当前是否可打开、能力清单。 |
+| `af_backend` | 仅插件目录 | 报告版本、平台、Node/SQLite 版本、索引库位置与可写性、配置的根目录当前是否可打开、能力清单。 |
+| `af_probe_write` | **会写临时文件** | 在插件数据目录与已配置的 `probeDir` 内测 `O_EXCL`/独占复制/硬链接/rename 是否覆盖/跨目录 rename/fsync/时间戳精度/剩余空间，测完自清理并报告残留。不碰用户文件。 |
 | `af_scan` | 仅索引库 | 扫描已配置根目录（或其中一个），入库并计算候选哈希。只读用户文件。 |
 | `af_scan_report` | 无 | 单次扫描的聚合报告：分类计数、重复统计、零字节、冲突、错误。**不含路径**。 |
 | `af_files` | 无 | 分页浏览索引条目。**默认遮蔽名称与路径**。 |
@@ -130,7 +135,7 @@ rules:
 ```sh
 node --test          # 44 个单元测试（不需要任何依赖）
 npm run check        # 全部 lib 文件语法检查
-npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.1.2.tgz
+npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.1.3.tgz
 ```
 
 仓库内 `lib/` 即发布物，提交前请确认 `node --check` 与 `node --test` 均通过。
@@ -141,7 +146,7 @@ npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.1.2.tgz
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | M1 | 索引扫描、分类、内容去重、编号名识别、SQLite 持久化、隐私裁剪 | **本次交付** |
-| M2 | 不可变计划 + digest、`userQuestions` plan-review 授权、建目录/复制/移动/改名、状态机、中断核对 | 未开始 |
+| M2 | 不可变计划 + digest、`userQuestions` plan-review 授权、建目录/复制/移动/改名、状态机、中断核对 | **进行中**：写入语义探测（`af_probe_write`）已交付 |
 | M3 | 重复副本隔离、恢复方案、空间统计（仍不开放永久清空） | 未开始 |
 | M4 | 独立测试目录里的异常场景验收、性能与取消验证 | 未开始 |
 
