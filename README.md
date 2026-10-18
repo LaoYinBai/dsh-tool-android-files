@@ -65,31 +65,34 @@ git+https://github.com/LaoYinBai/dsh-tool-android-files.git
 
 你需要的：
 
-1. 手机上装好了 Android 版 DSH，能正常和 AI 对话。
+1. 手机上装好了 **任意一个社区移植的 Android 版 DSH**，能正常和 AI 对话。
 2. 知道你的文件在哪。绝大多数手机就是 `/storage/emulated/0/Download`。
-3. 会复制粘贴命令（不用懂 Linux）。
+3. 会复制粘贴（不用懂 Linux）。
 
-确认一下这台手机上的 DSH 路径（下面命令都会用到）：
+这个插件用的是 DSH 的标准插件接口（Cordis 插件 + `defineTool`），**不针对某个具体移植版**：
+只要那个版本能装标准 DSH 插件，就能用。区别只在"插件管理页长什么样"和"路径怎么走"。
 
-```sh
-NODE="$HOME/payload/runtime/bin/node"
-DSHBIN="$HOME/payload/dshroot/lib/node_modules/@deepseek-ai/dsh/lib/bin.js"
-```
+如果那个版本有插件管理页，你**不需要**准备任何命令，直接粘安装地址就行。
 
 ---
 
 ## 安装（三步）
 
+> 这是一个**标准 DSH 插件**，不绑定某个特定的移植版。下面凡是出现 `$HOME/payload/...` 这类路径，
+> 都只是**某个移植版的示例**——你那个版本可能不一样。**优先用插件管理页安装**，就不需要关心这些路径。
+
 ### 第一步：装插件
 
-就是**页面最上面那一行安装地址**，已经装过就跳过。
+就是**页面最上面那一行安装地址**，粘进插件管理页，已经装过就跳过。
 
 如果 `plugin add` 不接受 git 地址，用兜底办法：
 
 ```sh
 cd "$DSH_HOME/profiles/web"
-"$HOME/payload/bin/pnpm" add git+https://github.com/LaoYinBai/dsh-tool-android-files.git
+pnpm add git+https://github.com/LaoYinBai/dsh-tool-android-files.git
 ```
+
+> `pnpm` 在你的移植版里可能是 `payload/bin/pnpm` 的绝对路径，也可能直接在 `PATH` 里。用能跑通的那个。
 
 ### 第二步：告诉它管哪些目录
 
@@ -105,6 +108,8 @@ cd "$DSH_HOME/profiles/web"
         quarantineDir: /storage/emulated/0/DeepSeekHarness/quarantine
 ```
 
+`$DSH_HOME` 没设的话，它就是 App 的数据目录；插件运行时读的是环境变量 `DSH_HOME`，移植版之间这个名字是一致的。
+
 两个字段的意思：
 
 | 字段 | 意思 | 不填会怎样 |
@@ -112,13 +117,21 @@ cd "$DSH_HOME/profiles/web"
 | `roots` | 允许它**看**哪些目录（可以写多个） | 所有工具都拒绝工作 |
 | `quarantineDir` | 重复文件被收起来后放在哪 | 无法生成整理计划 |
 
-`quarantineDir` 建议放在共享存储上（和 Download 同一个卷），这样搬文件是在同一个卷内进行，快且省空间。
+`quarantineDir` 写在**和 Download 同一个卷**上最好（例如 `/storage/emulated/0/DeepSeekHarness/quarantine`），移文件是卷内操作，快且不额外占空间。
+
+如果你的移植版**没有** `DeepSeekHarness` 这个公共目录，可以把它放到 App 私有目录，插件同样接受（只是跨卷复制会慢一些）：
+
+```yaml
+quarantineDir: /data/user/0/<你的包名>/files/quarantine
+```
 
 ### 第三步：重启引擎
 
+移植版通常是 App 里有「重启引擎」按钮；也可以从终端把 node 进程杀掉，App 会自己拉起来：
+
 ```sh
 ps -A -o PID,NAME | grep -i node      # 找到引擎进程
-kill <刚才看到的 PID>                  # App 会自动拉起新引擎
+kill <刚才看到的 PID>
 ```
 
 ---
@@ -129,7 +142,7 @@ kill <刚才看到的 PID>                  # App 会自动拉起新引擎
 
 > 调用 af_backend，把返回内容原样贴给我
 
-看到 `plugin_version=1.1.0`、`roots_configured=1`、`roots_ready=1` 就说明装好了。
+看到 `plugin_version=1.2.0`、`roots_configured=1`、`roots_ready=1` 就说明装好了。
 
 **第 2 句**（扫描）：
 
@@ -281,7 +294,7 @@ quarantine/
 ## 给开发者
 
 - **仓库**：https://github.com/LaoYinBai/dsh-tool-android-files
-- **版本**：`1.1.4`｜**许可**：MIT（见 [LICENSE](LICENSE)）
+- **版本**：`1.2.0`｜**许可**：MIT（见 [LICENSE](LICENSE)）
 - **结构**：纯 ESM，零运行时依赖，无构建步骤（`lib/` 就是源码，装到手机上直接跑）
 - **持久化**：`node:sqlite`（设备上没有编译器，也没有原生模块）
 - **测试**：83 个单元测试 + 一套用真实 DSH 编译器跑的冒烟测试；CI 在 Node 22/24 上执行
