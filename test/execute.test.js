@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import fsp from 'node:fs/promises'
 import { openStore } from '../lib/db.js'
-import { executePlan } from '../lib/execute.js'
+import { executePlan, spaceVerdict, SPACE_MARGIN_BYTES } from '../lib/execute.js'
 import { DEDUPE_POLICY, RESTORE_POLICY, buildDedupePlan, buildRestorePlan, planDigest } from '../lib/plan.js'
 import { sha256File } from '../lib/hash.js'
 
@@ -237,4 +237,21 @@ test('a restore plan reports the reverse direction and leaves no empty directory
   } finally {
     await fsp.rm(dir, { recursive: true, force: true, maxRetries: 2, retryDelay: 20 }).catch(() => {})
   }
+})
+test('the space verdict refuses a run that cannot fit and allows one that does', () => {
+  assert.equal(spaceVerdict({ freeBytes: 10_000, neededBytes: 100, marginBytes: 0 }).ok, true)
+  const refused = spaceVerdict({ freeBytes: 10_000, neededBytes: 10_100, marginBytes: 0 })
+  assert.equal(refused.ok, false)
+  assert.equal(refused.shortfall, 100)
+  assert.equal(spaceVerdict({ freeBytes: 100, neededBytes: 100, marginBytes: 0 }).ok, true)
+
+  // The default margin is conservative on purpose: a 100 byte plan still wants
+  // the headroom, so it fits only when the volume really has it.
+  assert.equal(spaceVerdict({ freeBytes: 60 * 1024 * 1024, neededBytes: 100 }).ok, false)
+  assert.equal(spaceVerdict({ freeBytes: 1024 * 1024 * 1024, neededBytes: 100 }).ok, true)
+  assert.ok(SPACE_MARGIN_BYTES >= 1024 * 1024)
+
+  // Unknown free space must not block: the per-operation checks still apply.
+  assert.equal(spaceVerdict({ freeBytes: null, neededBytes: 10 }).ok, true)
+  assert.equal(spaceVerdict({ freeBytes: 0, neededBytes: 10 }).ok, true)
 })

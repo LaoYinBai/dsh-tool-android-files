@@ -1,6 +1,6 @@
 # @laoyinbai/dsh-tool-android-files
 
-面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `0.5.1`：**M1 只读分析 + M2.1 计划与授权**。
+面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `0.6.0`：**M1 只读分析 + M2.1 计划与授权**。
 
 M1 能做的事：把指定目录**索引**到手机本地 SQLite，做分类、内容级去重、自动编号文件名识别、APK 结构检查，
 然后以**聚合数字**的形式向模型汇报。**不会移动、重命名、删除任何用户文件。**
@@ -41,7 +41,7 @@ NODE="$HOME/payload/runtime/bin/node"
 
 # 方式 B：GitHub Release 预打包 tgz
 "$NODE" "$DSHBIN" plugin --profile web add \
-  https://github.com/LaoYinBai/dsh-tool-android-files/releases/download/v0.5.1/laoyinbai-dsh-tool-android-files-0.5.1.tgz
+  https://github.com/LaoYinBai/dsh-tool-android-files/releases/download/v0.6.0/laoyinbai-dsh-tool-android-files-0.6.0.tgz
 ```
 
 > 版本门禁：DSH 在加载前会校验 `peerDependencies` 里 `@deepseek-ai/dsh-*` 与运行时版本是否兼容。
@@ -147,7 +147,7 @@ rules:
 ```sh
 node --test          # 44 个单元测试（不需要任何依赖）
 npm run check        # 全部 lib 文件语法检查
-npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.5.1.tgz
+npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.6.0.tgz
 ```
 
 仓库内 `lib/` 即发布物，提交前请确认 `node --check` 与 `node --test` 均通过。
@@ -210,3 +210,57 @@ npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.5.1.tgz
 ## 11. 许可
 
 未声明许可证，保留所有权利。
+
+## 12. 验收手册（真机）
+
+### A. 计划生命周期回归
+
+`af_plan_list` 应显示恢复计划与前向计划的互指：
+
+```
+5  restore committed ... undoes=#3
+4  restore committed ... undoes=#2
+3  dedupe  restored  ... restored_by=#5
+2  dedupe  restored  ... restored_by=#4
+1  dedupe  approved  ... stale=true
+```
+
+历史计划（0.4.0 写入、无 `source_plan_id`）由 v5 迁移从隔离路径反推补齐。
+
+### B. 故障注入
+
+| # | 场景 | 造法 | 期望 |
+|---|---|---|---|
+| B1 | 目标已存在 | 计划生成后，在 `quarantine/<planId>/` 下手建同名目标 | 该项 `failed`，源保留，计划 `needs-review` |
+| B2 | 源被执行前改动 | 计划生成后 `echo x >> 源文件` | 该项 `failed`（hash 不符），源保留 |
+| B3 | 执行中被杀 | `af_plan_execute` 期间 `kill -9 <engine pid>` | 重启后计划 `needs-review`，`plan_ops` 停在 `copying`/`committed`，**不自动续跑** |
+| B4 | 空间不足 | 纯函数 `spaceVerdict` 已单测覆盖；真机不造 ENOSPC | 拒绝启动（`AF_UNSUPPORTED`），一个字节都不写 |
+
+> B3 之后不要重试旧计划：重新 `af_scan` 再生成新计划。旧计划停留在 `needs-review` 作为证据。
+
+### C. 性能
+
+```sh
+NODE="$HOME/payload/runtime/bin/node"
+BENCH=/storage/emulated/0/DeepSeekHarness/af-bench
+# 1 万个空文件
+"$NODE" -e "const fs=require('fs');fs.mkdirSync('$BENCH',{recursive:true});for(let i=0;i<10000;i++)fs.writeFileSync('$BENCH/f'+i+'.txt','')"
+# 两个 512 MiB 同尺寸文件（触发流式哈希）
+"$NODE" -e "const fs=require('fs');const b=Buffer.alloc(1048576);for(const n of ['a.bin','b.bin']){const fd=fs.openSync('$BENCH/'+n,'w');for(let i=0;i<512;i++)fs.writeSync(fd,b);fs.closeSync(fd)}"
+```
+
+把 `$BENCH` 加进 `roots`，然后：
+
+```
+af_scan root=$BENCH maxEntries=20000
+```
+
+记录 `files / dirs / elapsed_ms / hashed / peak_rss_mb`。
+
+判据：
+
+- 1 万文件扫描应在 **30 秒内**完成（按 8.8 ms/文件外推约 90 秒，是上限）
+- `peak_rss_mb` 不应随文件数线性增长；扫描 1 万个空文件与 600 个真实文件的峰值应在同一量级
+- 512 MiB × 2 的哈希：`hashed=2`，`peak_rss_mb` **不应增加约 512 MB**——若增加说明某处把文件读进了内存
+
+5 GB 单文件未实测：用同一套方法把 `count` 增大即可，判据相同。测完 `rm -rf $BENCH`。
