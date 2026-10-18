@@ -5,7 +5,7 @@ import path from 'node:path'
 import fsp from 'node:fs/promises'
 import { openStore } from '../lib/db.js'
 import { executePlan, spaceVerdict, SPACE_MARGIN_BYTES } from '../lib/execute.js'
-import { DEDUPE_POLICY, RESTORE_POLICY, buildDedupePlan, buildRestorePlan, planDigest } from '../lib/plan.js'
+import { DEDUPE_POLICY, RESTORE_POLICY, ARCHIVE_POLICY, RENAME_POLICY, buildDedupePlan, buildRestorePlan, buildRenamePlan, archiveRelPath, planDigest } from '../lib/plan.js'
 import { sha256File } from '../lib/hash.js'
 
 async function memberFor(id, absPath, root) {
@@ -351,6 +351,130 @@ test('a move keeps the source modification time', async () => {
     )
     const log = store.listExecLog(plan.id)
     assert.ok(log.some((entry) => entry.event === 'times-preserved'), 'preservation is journalled')
+    store.raw.close()
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true, maxRetries: 2, retryDelay: 20 }).catch(() => {})
+  }
+})
+async function approvedPlanOf(store, scanId, mode, policy, ops, plannedBytes) {
+  const planId = store.createPlan(scanId, mode, policy)
+  const digest = planDigest(planId, mode, policy, ops)
+  store.finalizePlan(planId, {
+    digest,
+    ops,
+    keepCount: 0,
+    skippedGroups: 0,
+    skippedBytes: 0,
+    plannedBytes,
+  })
+  assert.equal(store.approvePlan(planId, digest, 'test-call'), true)
+  return store.getPlan(planId)
+}
+
+function opFor(fileId, srcPath, dstPath, live, kind) {
+  return {
+    opId: kind === 'rename' ? `rn-${String(fileId).padStart(4, '0')}` : `ar-${String(fileId).padStart(4, '0')}`,
+    kind,
+    groupKey: '',
+    fileId,
+    keepFileId: 0,
+    srcPath,
+    dstPath,
+    size: Number(live.size),
+    dev: String(live.dev),
+    ino: String(live.ino),
+    mtimeMs: Math.trunc(Number(live.mtimeMs)),
+    hash: null,
+    reason: 'test',
+  }
+}
+
+test('an archive plan can be restored back to the root', async () => {
+  const { dir, root, quarantineDir } = await fixture()
+  try {
+    const payload = Buffer.from('archived payload')
+    const src = path.join(root, 'a.jpg')
+    await fsp.writeFile(src, payload)
+    const past = new Date('2026-03-05T10:00:00Z')
+    await fsp.utimes(src, past, past)
+
+    const store = await openStore(path.join(dir, 'index.sqlite'))
+    const scanId = store.startScan([root])
+    const live = await fsp.lstat(src)
+    const dst = path.join(root, archiveRelPath('image', live.mtimeMs, 'a.jpg'))
+    const plan = await approvedPlanOf(store, scanId, 'archive', ARCHIVE_POLICY, [opFor(1, src, dst, live, 'move')], Number(live.size))
+
+    const archived = await executePlan(store, plan, { quarantineDir })
+    assert.equal(archived.status, 'committed')
+    assert.equal(archived.note, '1 个文件已归档到类别目录')
+    assert.ok(await fsp.lstat(dst))
+    await assert.rejects(() => fsp.lstat(src), /ENOENT/)
+
+    // Now undo it, building the entries the way af_plan_restore does.
+    const stored = store.getPlan(plan.id)
+    const entries = []
+    for (const row of store.listPlanOps(plan.id)) {
+      if (row.state !== 'source-removed') continue
+      const original = stored.ops.find((op) => op.opId === row.opId)
+      const copy = await memberFor(row.fileId, original.dstPath, path.dirname(original.dstPath))
+      entries.push({
+        fileId: row.fileId,
+        quarantinePath: original.dstPath,
+        originalPath: original.srcPath,
+        size: copy.size,
+        dev: copy.dev,
+        ino: copy.ino,
+        mtimeMs: copy.mtimeMs,
+        hash: copy.hash,
+      })
+    }
+    assert.equal(entries.length, 1)
+
+    const restoredPlanId = store.createPlan(scanId, 'restore', RESTORE_POLICY, plan.id)
+    const built = buildRestorePlan(entries)
+    const digest = planDigest(restoredPlanId, 'restore', built.policy, built.ops)
+    store.finalizePlan(restoredPlanId, {
+      digest,
+      ops: built.ops,
+      keepCount: 0,
+      skippedGroups: 0,
+      skippedBytes: 0,
+      plannedBytes: built.plannedBytes,
+    })
+    assert.equal(store.approvePlan(restoredPlanId, digest, 'test-call'), true)
+    const restored = await executePlan(store, store.getPlan(restoredPlanId), { quarantineDir })
+    assert.equal(restored.status, 'committed')
+
+    assert.equal(await fsp.readFile(src, 'utf8'), payload.toString())
+    assert.equal(Math.trunc((await fsp.lstat(src)).mtimeMs), past.getTime(), 'the original time comes back too')
+    await assert.rejects(() => fsp.lstat(dst), /ENOENT/)
+    store.raw.close()
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true, maxRetries: 2, retryDelay: 20 }).catch(() => {})
+  }
+})
+
+test('a rename plan normalises the counter and keeps the file intact', async () => {
+  const { dir, root, quarantineDir } = await fixture()
+  try {
+    const payload = Buffer.from('apk payload')
+    const src = path.join(root, '工具.apk（1）')
+    const dst = path.join(root, '工具 (1).apk')
+    await fsp.writeFile(src, payload)
+    const past = new Date('2026-01-02T03:04:05Z')
+    await fsp.utimes(src, past, past)
+
+    const store = await openStore(path.join(dir, 'index.sqlite'))
+    const scanId = store.startScan([root])
+    const live = await fsp.lstat(src)
+    const plan = await approvedPlanOf(store, scanId, 'rename', RENAME_POLICY, [opFor(7, src, dst, live, 'rename')], Number(live.size))
+
+    const result = await executePlan(store, plan, { quarantineDir })
+    assert.equal(result.status, 'committed')
+    assert.equal(result.note, '1 个文件已重命名')
+    assert.equal(await fsp.readFile(dst, 'utf8'), payload.toString())
+    assert.equal(Math.trunc((await fsp.lstat(dst)).mtimeMs), past.getTime())
+    await assert.rejects(() => fsp.lstat(src), /ENOENT/)
     store.raw.close()
   } finally {
     await fsp.rm(dir, { recursive: true, force: true, maxRetries: 2, retryDelay: 20 }).catch(() => {})

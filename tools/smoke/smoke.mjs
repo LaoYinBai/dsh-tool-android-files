@@ -65,10 +65,10 @@ const ctx = {
 }
 
 const dispose = apply(ctx, { roots: [fixture], maxEntries: 1000, quarantineDir: path.join(fixture, '.quarantine'), probeDir: '' })
-assert.equal(definitions.length, 15, 'fifteen tools must register')
+assert.equal(definitions.length, 16, 'sixteen tools must register')
 assert.deepEqual(
   definitions.map((definition) => definition.name),
-  ['af_backend', 'af_probe_write', 'af_scan', 'af_scan_report', 'af_files', 'af_duplicates', 'af_names', 'af_plan_create', 'af_plan_preview', 'af_plan_apply', 'af_plan_execute', 'af_plan_list', 'af_storage', 'af_plan_restore', 'af_plan_archive'],
+  ['af_backend', 'af_probe_write', 'af_scan', 'af_scan_report', 'af_files', 'af_duplicates', 'af_names', 'af_plan_create', 'af_plan_preview', 'af_plan_apply', 'af_plan_execute', 'af_plan_list', 'af_storage', 'af_plan_restore', 'af_plan_archive', 'af_plan_rename'],
 )
 
 const exec = () => ({

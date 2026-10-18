@@ -1,6 +1,6 @@
 # @laoyinbai/dsh-tool-android-files
 
-面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `0.7.1`：**M1 只读分析 + M2.1 计划与授权**。
+面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `1.0.0`：**M1 只读分析 + M2.1 计划与授权**。
 
 M1 能做的事：把指定目录**索引**到手机本地 SQLite，做分类、内容级去重、自动编号文件名识别、APK 结构检查，
 然后以**聚合数字**的形式向模型汇报。**不会移动、重命名、删除任何用户文件。**
@@ -212,7 +212,7 @@ npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.6.0.tgz
 
 ## 11. 许可
 
-未声明许可证，保留所有权利。
+`UNLICENSED` —— 保留所有权利，不授予复用许可。如需开源，请自行添加 LICENSE 并修改 `package.json` 的 `license` 字段。
 
 ## 12. 验收手册（真机）
 
