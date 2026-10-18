@@ -1,0 +1,39 @@
+{
+  "name": "@laoyinbai/dsh-tool-android-files",
+  "version": "0.1.0",
+  "description": "Android-first file organization tools for DeepSeek Harness (M1: read-only scan, classification, content dedupe, numbered-name analysis).",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": "./lib/index.js"
+  },
+  "files": [
+    "lib",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.5"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.4",
+    "@deepseek-ai/dsh-tools": "^0.2.0-rc.2"
+  },
+  "dsh": {
+    "manifestVersion": 1,
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "test": "node --test",
+    "check": "node --check lib/index.js && node --check lib/tools.js && node --check lib/scan.js && node --check lib/db.js && node --check lib/naming.js && node --check lib/classify.js && node --check lib/apk.js && node --check lib/paths.js"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "android",
+    "file-manager",
+    "dedupe"
+  ]
+}

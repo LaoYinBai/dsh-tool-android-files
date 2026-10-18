@@ -1,0 +1,6 @@
+# The plugin runs on Android/Linux; keep every tracked text file LF in the tree
+# so a Windows checkout cannot introduce CRLF into the shipped package.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.tgz binary

@@ -1,0 +1,7 @@
+- insert:
+    - id: android-files
+      name: '@laoyinbai/dsh-tool-android-files'
+      # config:
+      #   roots: ['/storage/emulated/0/Download']
+      #   dataDir: '/data/user/0/com.deepseek.harness/files/payload/dshhome/plugin-data/dsh-tool-android-files'
+      #   maxEntries: 5000
