@@ -9,7 +9,7 @@ import { openStore } from '../lib/db.js'
  * A phone upgrading from 0.1.2 holds a v1 index. Rebuilding it would lose scan
  * history, so the migration must add the new column in place.
  */
-test('a v1 index upgrades to v2 without losing rows', async () => {
+test('a v1 index upgrades to the current schema without losing rows', async () => {
   const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'af-migrate-'))
   const dbPath = path.join(dir, 'index.sqlite')
   try {
@@ -45,9 +45,13 @@ test('a v1 index upgrades to v2 without losing rows', async () => {
     const upgraded = await openStore(dbPath)
     try {
       const version = Number(upgraded.raw.prepare('PRAGMA user_version').get().user_version)
-      assert.equal(version, 2)
+      assert.equal(version, 3)
       const columns = upgraded.raw.prepare('PRAGMA table_info(files)').all().map((row) => row.name)
       assert.ok(columns.includes('protection'))
+      assert.ok(
+        upgraded.raw.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='plans'").get(),
+        'plans table must exist after migration',
+      )
       assert.equal(upgraded.countFiles(scanId), 1, 'existing rows must survive')
       // The scan never finished, so opening the index must reconcile it.
       assert.equal(upgraded.getScan(scanId).status, 'interrupted')

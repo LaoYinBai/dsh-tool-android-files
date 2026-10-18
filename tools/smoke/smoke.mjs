@@ -57,13 +57,18 @@ const ctx = {
     },
   },
   logger: { warn: (message) => console.warn('[warn]', message) },
+  // Test double for the host's answerer chain: the plan gate must be exercised.
+  get(name) {
+    if (name !== 'userQuestions') return undefined
+    return { ask: async () => ({ answers: [{ id: 'af-plan-review', selected: ['Approve plan'] }] }) }
+  },
 }
 
-const dispose = apply(ctx, { roots: [fixture], maxEntries: 1000 })
-assert.equal(definitions.length, 7, 'seven tools must register')
+const dispose = apply(ctx, { roots: [fixture], maxEntries: 1000, quarantineDir: path.join(home, 'quarantine'), probeDir: '' })
+assert.equal(definitions.length, 10, 'ten tools must register')
 assert.deepEqual(
   definitions.map((definition) => definition.name),
-  ['af_backend', 'af_probe_write', 'af_scan', 'af_scan_report', 'af_files', 'af_duplicates', 'af_names'],
+  ['af_backend', 'af_probe_write', 'af_scan', 'af_scan_report', 'af_files', 'af_duplicates', 'af_names', 'af_plan_create', 'af_plan_preview', 'af_plan_apply'],
 )
 
 const exec = () => ({
@@ -155,6 +160,29 @@ assert.ok(outside.error.startsWith('AF_ROOT_NOT_ALLOWED'), outside.error)
 const denied = await call('af_scan', { root: '/storage/emulated/0/Android/data' })
 assert.equal(denied.ok, false)
 console.log('boundary refusals OK:', outside.error, '|', denied.error)
+
+const plan = await call('af_plan_create', {})
+assert.equal(plan.ok, true, `af_plan_create failed: ${plan.error}`)
+assert.ok(plan.ops >= 3, `expected at least three operations, got ${plan.ops}`)
+assert.equal(plan.digest.length, 64)
+console.log('--- af_plan_create render ---')
+console.log(rendered.get('af_plan_create'))
+
+const preview = await call('af_plan_preview', { plan_id: plan.plan_id, limit: 20 })
+assert.equal(preview.ok, true)
+assert.equal(preview.total, plan.ops)
+assert.equal(preview.status, 'proposed')
+assert.ok(preview.items.every((item) => item.src.startsWith('#')), 'preview must mask paths by default')
+
+const applied = await call('af_plan_apply', { plan_id: plan.plan_id })
+assert.equal(applied.ok, true, `af_plan_apply failed: ${applied.error}`)
+assert.equal(applied.authorized, true)
+assert.equal(applied.executed, 0)
+console.log(rendered.get('af_plan_apply'))
+
+const replay = await call('af_plan_apply', { plan_id: plan.plan_id })
+assert.equal(replay.ok, false, 'a second approval must be refused')
+assert.ok(replay.error.startsWith('AF_PLAN_NOT_PROPOSED'), replay.error)
 
 dispose()
 fs.rmSync(fixture, { recursive: true, force: true })
