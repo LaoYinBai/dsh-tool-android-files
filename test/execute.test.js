@@ -5,7 +5,7 @@ import path from 'node:path'
 import fsp from 'node:fs/promises'
 import { openStore } from '../lib/db.js'
 import { executePlan } from '../lib/execute.js'
-import { DEDUPE_POLICY, buildDedupePlan, planDigest } from '../lib/plan.js'
+import { DEDUPE_POLICY, RESTORE_POLICY, buildDedupePlan, buildRestorePlan, planDigest } from '../lib/plan.js'
 import { sha256File } from '../lib/hash.js'
 
 async function memberFor(id, absPath, root) {
@@ -173,6 +173,66 @@ test('a plan that is not approved cannot execute', async () => {
     const { store, plan } = await approvedPlan(dir, members, { root, quarantineDir })
     const proposed = { ...plan, status: 'proposed' }
     await assert.rejects(() => executePlan(store, proposed, { quarantineDir }), /not approved/)
+    store.raw.close()
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true, maxRetries: 2, retryDelay: 20 }).catch(() => {})
+  }
+})
+
+test('a restore plan reports the reverse direction and leaves no empty directory', async () => {
+  const { dir, root, quarantineDir } = await fixture()
+  try {
+    const payload = Buffer.from('round trip payload')
+    const a = path.join(root, 'a.mp4')
+    const b = path.join(root, 'b.mp4')
+    await fsp.writeFile(a, payload)
+    await fsp.writeFile(b, payload)
+    const members = [await memberFor(1, a, root), await memberFor(2, b, root)]
+    const { store, plan } = await approvedPlan(dir, members, { root, quarantineDir })
+    const forward = await executePlan(store, plan, { quarantineDir })
+    assert.equal(forward.note, '1 个文件已移入隔离区')
+
+    const stored = store.getPlan(plan.id)
+    const entries = []
+    for (const op of stored.ops) {
+      const copy = await memberFor(op.fileId, op.dstPath, path.dirname(op.dstPath))
+      entries.push({
+        fileId: op.fileId,
+        quarantinePath: op.dstPath,
+        originalPath: op.srcPath,
+        size: copy.size,
+        dev: copy.dev,
+        ino: copy.ino,
+        mtimeMs: copy.mtimeMs,
+        hash: copy.hash,
+      })
+    }
+    const restoreId = store.createPlan(stored.scanId, 'restore', RESTORE_POLICY, stored.id)
+    const built = buildRestorePlan(entries)
+    const digest = planDigest(restoreId, 'restore', built.policy, built.ops)
+    store.finalizePlan(restoreId, {
+      digest,
+      ops: built.ops,
+      keepCount: 0,
+      skippedGroups: 0,
+      skippedBytes: 0,
+      plannedBytes: built.plannedBytes,
+    })
+    assert.equal(store.approvePlan(restoreId, digest, 'test-call'), true)
+
+    const restored = await executePlan(store, store.getPlan(restoreId), { quarantineDir })
+    assert.equal(restored.status, 'committed')
+    assert.equal(restored.note, '1 个文件已恢复到原路径')
+    assert.equal(await fsp.readFile(b, 'utf8'), payload.toString(), 'the file is back in place')
+    await assert.rejects(() => fsp.lstat(path.join(quarantineDir, String(restoreId))), /ENOENT/)
+
+    assert.equal(store.markRestored(stored.id, 'test'), true)
+    assert.equal(store.markRestored(stored.id, 'test'), false, 'restoring is recorded once')
+    const listed = store.listPlans(10)
+    const forwardRow = listed.find((row) => row.id === stored.id)
+    assert.equal(forwardRow.status, 'restored')
+    assert.equal(forwardRow.restoredBy, restoreId)
+    assert.equal(listed.find((row) => row.id === restoreId).sourcePlanId, stored.id)
     store.raw.close()
   } finally {
     await fsp.rm(dir, { recursive: true, force: true, maxRetries: 2, retryDelay: 20 }).catch(() => {})
