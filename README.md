@@ -1,6 +1,6 @@
 # @laoyinbai/dsh-tool-android-files
 
-面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `0.1.0`，处于 **M1：只读分析**。
+面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `0.1.1`，处于 **M1：只读分析**。
 
 M1 能做的事：把指定目录**索引**到手机本地 SQLite，做分类、内容级去重、自动编号文件名识别、APK 结构检查，
 然后以**聚合数字**的形式向模型汇报。**不会移动、重命名、删除任何用户文件。**
@@ -16,6 +16,7 @@ M2 起才有写入能力（不可变计划 + 可信授权 + 隔离区 + 状态�
 | **没有构建步骤**，`lib/` 就是源码（纯 ESM、零运行时依赖） | 手机端不具备构建能力，pnpm 对 git 依赖又禁止 `prepare` 脚本。把源码直接当产物，从根上消除"仓库里 `lib/` 与 `src/` 不一致"这一整类故障。 |
 | **不导出 Schemastery `Config`** | 配置非法时若 schema 校验失败，Cordis 会跳过整个插件，工具全部消失。改为在 `apply()` 内手工归一化，非法项降级并写入 `af_backend`，插件仍可加载。 |
 | **只读，且默认遮蔽文件名** | 文件清单、完整路径、哈希都属于隐私数据。默认只回传计数与匿名 id；只有显式 `reveal=true` 才返回真实名称。 |
+| **所有结论都写进 `render()` 文本** | DSH 只把 `render()` 生成的文本交给模型，`execute()` 返回的 JSON 值**不进模型上下文**（那是给 PTC/UI 用的）。因此每个工具的渲染文本都自带一行 `key=value`，含 `ok=`、`scan_id=`、全部计数与 `error=`，模型不需要“猜”结构化字段。 |
 | **不跟随符号链接** | 目录遍历永不进入 symlink，符号链接目录一律跳过并计数。 |
 | **不做 `ctx.fs` 调用** | DSH 原生文件服务没有 move/copy/delete，且受沙箱策略影响；本插件统一用 `node:fs/promises`。 |
 | **`node:sqlite` 而非 better-sqlite3** | 设备上没有任何原生模块预编译产物，也没有编译器。 |
@@ -34,7 +35,7 @@ NODE="$HOME/payload/runtime/bin/node"
 
 # 方式 B：GitHub Release 预打包 tgz
 "$NODE" "$DSHBIN" plugin --profile web add \
-  https://github.com/LaoYinBai/dsh-tool-android-files/releases/download/v0.1.0/laoyinbai-dsh-tool-android-files-0.1.0.tgz
+  https://github.com/LaoYinBai/dsh-tool-android-files/releases/download/v0.1.1/laoyinbai-dsh-tool-android-files-0.1.1.tgz
 ```
 
 > 版本门禁：DSH 在加载前会校验 `peerDependencies` 里 `@deepseek-ai/dsh-*` 与运行时版本是否兼容。
@@ -129,7 +130,7 @@ rules:
 ```sh
 node --test          # 44 个单元测试（不需要任何依赖）
 npm run check        # 全部 lib 文件语法检查
-npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.1.0.tgz
+npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.1.1.tgz
 ```
 
 仓库内 `lib/` 即发布物，提交前请确认 `node --check` 与 `node --test` 均通过。

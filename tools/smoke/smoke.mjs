@@ -74,20 +74,28 @@ const byName = (name) => definitions.find((definition) => definition.name === na
 
 // The registry validates every returned value against the compiled output
 // schema; a stray field there breaks the whole call on device, so check it here.
+// The model only ever sees the rendered text, so the render must carry every
+// field the model has to reason about.
 const { validateJsonSchemaValue } = await import('@deepseek-ai/dsh-tools')
+const rendered = new Map()
 function call(name, args = {}) {
   const definition = byName(name)
   return definition.execute(args, exec()).then((value) => {
     const violations = validateJsonSchemaValue(definition.output.schema, value, '')
     assert.deepEqual(violations, [], `${name} output violates its schema: ${violations.join('; ')}`)
+    const body = definition.output.render(args, value).map((block) => block.text).join('\n')
+    assert.match(body, new RegExp(`ok=${value.ok}`), `${name} render must expose ok=`)
+    rendered.set(name, body)
     return value
   })
 }
 
 const backend = await call('af_backend')
 assert.equal(backend.ok, true, `af_backend failed: ${backend.error}`)
-console.log('af_backend:', backend.platform, backend.node, backend.sqlite, backend.journal_mode)
-console.log(backend.roots_text)
+for (const field of ['ok=', 'roots_configured=', 'roots_ready=', 'db_writable=', 'sqlite=', 'journal_mode=']) {
+  assert.ok(rendered.get('af_backend').includes(field), `af_backend render is missing ${field}`)
+}
+console.log(rendered.get('af_backend'))
 
 const scan = await call('af_scan')
 assert.equal(scan.ok, true, `af_scan failed: ${scan.error}`)
@@ -102,7 +110,8 @@ console.log('af_scan_report:', report.categories, '| dup groups', report.duplica
 const masked = await call('af_files', { limit: 3 })
 assert.equal(masked.revealed, false)
 assert.ok(masked.items.every((item) => item.masked === true && item.rel_path.startsWith('#')))
-console.log('af_files (masked):', masked.items.map((item) => `${item.id}:${item.rel_path}`).join(', '))
+console.log('--- af_files (masked) render ---')
+console.log(rendered.get('af_files'))
 
 const revealed = await call('af_files', { limit: 3, reveal: true })
 assert.ok(revealed.items.every((item) => item.masked === false))
