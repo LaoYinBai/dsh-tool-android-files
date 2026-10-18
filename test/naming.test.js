@@ -16,7 +16,25 @@ test('ascii counter before extension', () => {
   assert.equal(info.numberForm, 'before-ext')
   assert.equal(info.parenStyle, 'ascii')
   assert.equal(info.baseName, '应用.apk')
-  assert.equal(info.canonicalName, '应用 (1).apk')
+  // The counter already sits on the correct side of the extension, so no
+  // rename is proposed: respacing the user's own filename is not a fix.
+  assert.equal(info.canonicalName, '应用(1).apk')
+  assert.ok(!info.flags.includes('needs_confirmation'))
+})
+
+test('a real numbered download is not flagged for confirmation', () => {
+  // Observed on device: `cnmd(1).mp3`, `oop练习题(1).pdf`. These are ordinary
+  // names; only ambiguity about what the number means deserves a flag.
+  const plain = analyzeName('cnmd(1).mp3')
+  assert.equal(plain.number, '1')
+  assert.equal(plain.canonicalName, 'cnmd(1).mp3')
+  assert.deepEqual(plain.flags, [])
+
+  const spaced = analyzeName('app-debug (1).apk')
+  assert.equal(spaced.number, '1')
+  assert.equal(spaced.canonicalName, 'app-debug (1).apk')
+  assert.ok(!spaced.flags.includes('needs_confirmation'))
+  assert.ok(spaced.flags.includes('space_before_paren'))
 })
 
 test('fullwidth counter before extension', () => {

@@ -31,6 +31,9 @@ const seed = {
   'sub/big.bin': 'x'.repeat(4096),
   'sub/big (1).bin': 'x'.repeat(4096),
   'sub/big (2).bin': 'y'.repeat(4096),
+  'video.mp4.part': 'partial-download',
+  'iso.1': 'volume-one',
+  'iso.2': 'volume-two',
 }
 for (const [name, content] of Object.entries(seed)) {
   const target = path.join(fixture, name)
@@ -108,8 +111,9 @@ console.log(rendered.get('af_probe_write'))
 const scan = await call('af_scan')
 assert.equal(scan.ok, true, `af_scan failed: ${scan.error}`)
 console.log('af_scan:', JSON.stringify(scan))
-assert.equal(scan.files, 10)
+assert.equal(scan.files, 13)
 assert.ok(scan.duplicate_groups >= 2)
+assert.equal(scan.protected, 3, 'expected three protected files')
 
 const report = await call('af_scan_report')
 assert.equal(report.ok, true)

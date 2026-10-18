@@ -1,6 +1,6 @@
 # @laoyinbai/dsh-tool-android-files
 
-面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `0.1.3`，处于 **M1：只读分析**，外加 M2 的写入能力探测。
+面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `0.1.4`，处于 **M1：只读分析**，外加 M2 的写入能力探测。
 
 M1 能做的事：把指定目录**索引**到手机本地 SQLite，做分类、内容级去重、自动编号文件名识别、APK 结构检查，
 然后以**聚合数字**的形式向模型汇报。**不会移动、重命名、删除任何用户文件。**
@@ -38,7 +38,7 @@ NODE="$HOME/payload/runtime/bin/node"
 
 # 方式 B：GitHub Release 预打包 tgz
 "$NODE" "$DSHBIN" plugin --profile web add \
-  https://github.com/LaoYinBai/dsh-tool-android-files/releases/download/v0.1.3/laoyinbai-dsh-tool-android-files-0.1.3.tgz
+  https://github.com/LaoYinBai/dsh-tool-android-files/releases/download/v0.1.4/laoyinbai-dsh-tool-android-files-0.1.4.tgz
 ```
 
 > 版本门禁：DSH 在加载前会校验 `peerDependencies` 里 `@deepseek-ai/dsh-*` 与运行时版本是否兼容。
@@ -135,7 +135,7 @@ rules:
 ```sh
 node --test          # 44 个单元测试（不需要任何依赖）
 npm run check        # 全部 lib 文件语法检查
-npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.1.3.tgz
+npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.1.4.tgz
 ```
 
 仓库内 `lib/` 即发布物，提交前请确认 `node --check` 与 `node --test` 均通过。
@@ -150,6 +150,40 @@ npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.1.3.tgz
 | M3 | 重复副本隔离、恢复方案、空间统计（仍不开放永久清空） | 未开始 |
 | M4 | 独立测试目录里的异常场景验收、性能与取消验证 | 未开始 |
 
-## 10. 许可
+## 10. 真机实测的写入语义（M2 设计依据）
+
+`af_probe_write` 在 Xiaomi `24031PN0DC` / Android 16 上实测（FUSE 共享存储 + ext4 应用卷）：
+
+| 能力 | 应用私有卷 (dev 65078) | 共享存储 (dev 1048595) | 结论 |
+|---|---|---|---|
+| `O_EXCL` 独占创建 | ✅ | ✅ | 不覆盖创建有可靠底座 |
+| `COPYFILE_EXCL` 独占复制 | ✅ | ✅ | 复制落盘可保证不覆盖 |
+| `link()` 硬链接 | ❌ EACCES | ❌ EACCES | `link`→`unlink` 方案出局 |
+| `rename` 静默覆盖目标 | ⚠️ 是 | ⚠️ 是 | **裸 `rename` 不能当移动用** |
+| 跨目录 `rename` | ✅ inode 稳定 | ✅ inode 稳定 | 同卷移动可用但不安全 |
+| `fsync` 文件 / 目录 | ✅ / ✅ | ✅ / ✅ | 可承诺"内容已校验 + 目录项已提交" |
+| 时间戳分辨率 | 4 ms | **8 ms**（`mtimeNs` 可用） | 并发核对以 `dev+ino+size+mtimeNs` 为必要条件，非充分条件 |
+| `statfs` 可用空间 | 370.4 GiB | 370.4 GiB | 空间预检可行 |
+
+**由此确定的移动策略**
+
+1. 同卷移动 = `copyFile(COPYFILE_EXCL)` → `fsync(file)` → SHA-256 校验 → `unlink(源)`。
+2. 目标已存在 → 直接 fail-closed，绝不覆盖。
+3. 跨卷（应用卷 ↔ 共享存储）必须 copy→verify→delete，并预检剩余空间。
+4. 隔离区应放**共享存储**（与用户文件同卷），否则每次隔离都是一次跨卷复制。
+5. 裸 `rename` 只在"目标确认不存在 + 同卷 + 单文件"时作为优化，失败立即回退 copy 方案。
+6. 任一前提不成立 → `AF_UNSUPPORTED`，不降级。
+
+**永不自动处理的文件**（真机数据里真实存在这些）
+
+| 类型 | 判据 | 处理 |
+|---|---|---|
+| 未完成下载 | `.part` `.downloading` `.crdownload` `.tmp` `.aria2` | 只索引，永不移动/隔离/改名 |
+| 数据库旁路 | `.db-journal` `.db-wal` `.db-shm` `.lock` | 只索引，永不移动 |
+| 分卷成员 | `.1` `.001` `.002` `.z01` `.r00`（按家族保护） | 整组保护，绝不单独去重 |
+
+实测案例：一个 80.9 MB × 4 的重复组，四个成员扩展名都是 `.1` —— 若按普通重复文件处理，会破坏一个分卷集合。
+
+## 11. 许可
 
 未声明许可证，保留所有权利。
