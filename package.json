@@ -1,6 +1,6 @@
 {
   "name": "@laoyinbai/dsh-tool-android-files",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "File organization tools for Android DeepSeek Harness: verified dedupe into quarantine, archive by category and month, safe renames, and one-command restore.",
   "type": "module",
   "main": "lib/index.js",
