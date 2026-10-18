@@ -4,6 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import fsp from 'node:fs/promises'
 import { openStore } from '../lib/db.js'
+import { DEDUPE_POLICY, RESTORE_POLICY } from '../lib/plan.js'
 
 /**
  * A phone upgrading from 0.1.2 holds a v1 index. Rebuilding it would lose scan
@@ -97,5 +98,52 @@ test('protection values are stored and countable', async () => {
     store.raw.close()
   } finally {
     await fsp.rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 })
+  }
+})
+
+test('a v4 restore plan recovers its forward plan from the quarantine path', async () => {
+  const dir = await fsp.mkdtemp(path.join(os.tmpdir(), 'af-backfill-'))
+  const dbPath = path.join(dir, 'index.sqlite')
+  try {
+    const store = await openStore(dbPath)
+    const scanId = store.startScan(['/x'])
+    const forwardId = store.createPlan(scanId, 'dedupe', DEDUPE_POLICY)
+    store.finalizePlan(forwardId, {
+      digest: 'a'.repeat(64),
+      ops: [{ opId: 'op-0001', kind: 'quarantine', srcPath: '/d/b.mp4', dstPath: `/q/${forwardId}/2_b.mp4`, size: 10 }],
+      keepCount: 1,
+      skippedGroups: 0,
+      skippedBytes: 0,
+      plannedBytes: 10,
+    })
+    assert.equal(store.approvePlan(forwardId, 'a'.repeat(64), 'c1'), true)
+    assert.equal(store.beginExecution(forwardId), true)
+    store.finishExecution(forwardId, 'committed', 'done')
+
+    // A restore plan written by 0.4.0: no source_plan_id column value.
+    const restoreId = store.createPlan(scanId, 'restore', RESTORE_POLICY)
+    store.finalizePlan(restoreId, {
+      digest: 'b'.repeat(64),
+      ops: [{ opId: 'rs-0001', kind: 'restore', srcPath: `/q/${forwardId}/2_b.mp4`, dstPath: '/d/b.mp4', size: 10 }],
+      keepCount: 0,
+      skippedGroups: 0,
+      skippedBytes: 0,
+      plannedBytes: 10,
+    })
+    assert.equal(store.approvePlan(restoreId, 'b'.repeat(64), 'c2'), true)
+    assert.equal(store.beginExecution(restoreId), true)
+    store.finishExecution(restoreId, 'committed', 'done')
+
+    store.raw.exec('PRAGMA user_version = 4')
+    store.raw.close()
+
+    const upgraded = await openStore(dbPath)
+    const restore = upgraded.getPlan(restoreId)
+    assert.equal(restore.sourcePlanId, forwardId, 'the forward plan id comes from the quarantine directory name')
+    const forward = upgraded.getPlan(forwardId)
+    assert.equal(forward.status, 'restored', 'a committed restore marks its forward plan restored')
+    upgraded.raw.close()
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true, maxRetries: 2, retryDelay: 20 }).catch(() => {})
   }
 })
