@@ -67,17 +67,23 @@ test('describeRoot rejects missing paths and files', async () => {
   }
 })
 
-test('assertRootIdentity detects a replaced directory', async () => {
+test('assertRootIdentity accepts the directory it described and rejects a forged identity', async () => {
   const parent = await fsp.mkdtemp(path.join(os.tmpdir(), 'af-swap-'))
   const target = path.join(parent, 'root')
   await fsp.mkdir(target)
   try {
     const desc = await describeRoot(target)
-    await fsp.rm(target, { recursive: true })
-    await fsp.mkdir(target)
+    // The same directory still passes.
+    assert.equal(await assertRootIdentity(desc), true)
     if (!desc.identityKnown) return
+    // Do not delete-and-recreate here: a filesystem may hand the freed inode
+    // straight back, which made this test pass on NTFS and fail on ext4. The
+    // guard is about comparing the recorded identity, so forge it instead.
+    // Forge a definitely-different identity. `ino + 1` is not usable: NTFS file
+    // ids exceed 2^53, so adding one is a floating-point no-op.
+    const forgedIno = desc.ino === 1 ? 2 : 1
     await assert.rejects(
-      () => assertRootIdentity(desc),
+      () => assertRootIdentity({ ...desc, ino: forgedIno }),
       (err) => err instanceof AfError && err.code === CODE.ROOT_CHANGED,
     )
   } finally {
