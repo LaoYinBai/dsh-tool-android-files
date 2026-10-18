@@ -325,3 +325,34 @@ test('a partially executed plan can be rolled back with a restore plan', async (
     await fsp.rm(dir, { recursive: true, force: true, maxRetries: 2, retryDelay: 20 }).catch(() => {})
   }
 })
+test('a move keeps the source modification time', async () => {
+  const { dir, root, quarantineDir } = await fixture()
+  try {
+    const payload = Buffer.from('timestamp payload')
+    const a = path.join(root, 'a.mp4')
+    const b = path.join(root, 'b.mp4')
+    await fsp.writeFile(a, payload)
+    await fsp.writeFile(b, payload)
+    const past = new Date('2026-03-05T10:00:00Z')
+    await fsp.utimes(a, past, past)
+    await fsp.utimes(b, past, past)
+
+    const members = [await memberFor(1, a, root), await memberFor(2, b, root)]
+    const { store, plan } = await approvedPlan(dir, members, { root, quarantineDir })
+    const result = await executePlan(store, plan, { quarantineDir })
+    assert.equal(result.status, 'committed')
+
+    const moved = path.join(quarantineDir, String(plan.id), '2_b.mp4')
+    const movedStat = await fsp.lstat(moved)
+    assert.equal(
+      Math.trunc(Number(movedStat.mtimeMs)),
+      Math.trunc(past.getTime()),
+      'the quarantined copy must keep the original modification time',
+    )
+    const log = store.listExecLog(plan.id)
+    assert.ok(log.some((entry) => entry.event === 'times-preserved'), 'preservation is journalled')
+    store.raw.close()
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true, maxRetries: 2, retryDelay: 20 }).catch(() => {})
+  }
+})
