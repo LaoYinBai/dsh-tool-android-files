@@ -92,7 +92,7 @@ function call(name, args = {}) {
 
 const backend = await call('af_backend')
 assert.equal(backend.ok, true, `af_backend failed: ${backend.error}`)
-for (const field of ['ok=', 'roots_configured=', 'roots_ready=', 'db_writable=', 'sqlite=', 'journal_mode=']) {
+for (const field of ['ok=', 'plugin_version=', 'roots_configured=', 'roots_ready=', 'db_writable=', 'sqlite=', 'journal_mode=']) {
   assert.ok(rendered.get('af_backend').includes(field), `af_backend render is missing ${field}`)
 }
 console.log(rendered.get('af_backend'))

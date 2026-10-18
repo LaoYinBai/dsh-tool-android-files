@@ -1,6 +1,6 @@
 # @laoyinbai/dsh-tool-android-files
 
-面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `0.1.1`，处于 **M1：只读分析**。
+面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `0.1.2`，处于 **M1：只读分析**。
 
 M1 能做的事：把指定目录**索引**到手机本地 SQLite，做分类、内容级去重、自动编号文件名识别、APK 结构检查，
 然后以**聚合数字**的形式向模型汇报。**不会移动、重命名、删除任何用户文件。**
@@ -35,7 +35,7 @@ NODE="$HOME/payload/runtime/bin/node"
 
 # 方式 B：GitHub Release 预打包 tgz
 "$NODE" "$DSHBIN" plugin --profile web add \
-  https://github.com/LaoYinBai/dsh-tool-android-files/releases/download/v0.1.1/laoyinbai-dsh-tool-android-files-0.1.1.tgz
+  https://github.com/LaoYinBai/dsh-tool-android-files/releases/download/v0.1.2/laoyinbai-dsh-tool-android-files-0.1.2.tgz
 ```
 
 > 版本门禁：DSH 在加载前会校验 `peerDependencies` 里 `@deepseek-ai/dsh-*` 与运行时版本是否兼容。
@@ -130,7 +130,7 @@ rules:
 ```sh
 node --test          # 44 个单元测试（不需要任何依赖）
 npm run check        # 全部 lib 文件语法检查
-npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.1.1.tgz
+npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.1.2.tgz
 ```
 
 仓库内 `lib/` 即发布物，提交前请确认 `node --check` 与 `node --test` 均通过。
