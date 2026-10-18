@@ -130,4 +130,9 @@ test('the markdown body carries the digest and every operation', () => {
   assert.ok(markdown.includes(digest), 'the card must show the digest the approval binds to')
   assert.ok(markdown.includes('b.bin'))
   assert.ok(markdown.includes('独占创建'))
+  // The card previews only its first two content lines, so line 2 must carry the
+  // decision-relevant numbers rather than the mode name.
+  const preview = markdown.split('\n').filter((line) => line.trim() !== '')
+  assert.ok(preview[1].includes('项操作'), preview[1])
+  assert.ok(preview[1].includes('移动'), preview[1])
 })
