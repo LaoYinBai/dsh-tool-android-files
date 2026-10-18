@@ -7,7 +7,7 @@ import {
   canonicalPlan,
   chooseKeeper,
   planDigest,
-  planMarkdown,
+  planText,
   assertPlanIntegrity,
 } from '../lib/plan.js'
 import { AfError, CODE } from '../lib/errors.js'
@@ -116,7 +116,7 @@ test('the markdown body carries the digest and every operation', () => {
   const groups = [{ size: 10, members: [member(1, 'a.bin'), member(2, 'b.bin')] }]
   const built = buildDedupePlan({ scanId: 1, planId: 5, quarantineDir: '/q', groups })
   const digest = planDigest(5, 'dedupe', DEDUPE_POLICY, built.ops)
-  const markdown = planMarkdown({
+  const markdown = planText({
     id: 5,
     mode: 'dedupe',
     scanId: 1,

@@ -1,6 +1,6 @@
 # @laoyinbai/dsh-tool-android-files
 
-面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `0.2.1`：**M1 只读分析 + M2.1 计划与授权**。
+面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `0.2.2`：**M1 只读分析 + M2.1 计划与授权**。
 
 M1 能做的事：把指定目录**索引**到手机本地 SQLite，做分类、内容级去重、自动编号文件名识别、APK 结构检查，
 然后以**聚合数字**的形式向模型汇报。**不会移动、重命名、删除任何用户文件。**
@@ -41,7 +41,7 @@ NODE="$HOME/payload/runtime/bin/node"
 
 # 方式 B：GitHub Release 预打包 tgz
 "$NODE" "$DSHBIN" plugin --profile web add \
-  https://github.com/LaoYinBai/dsh-tool-android-files/releases/download/v0.2.1/laoyinbai-dsh-tool-android-files-0.2.1.tgz
+  https://github.com/LaoYinBai/dsh-tool-android-files/releases/download/v0.2.2/laoyinbai-dsh-tool-android-files-0.2.2.tgz
 ```
 
 > 版本门禁：DSH 在加载前会校验 `peerDependencies` 里 `@deepseek-ai/dsh-*` 与运行时版本是否兼容。
@@ -143,7 +143,7 @@ rules:
 ```sh
 node --test          # 44 个单元测试（不需要任何依赖）
 npm run check        # 全部 lib 文件语法检查
-npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.2.1.tgz
+npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.2.2.tgz
 ```
 
 仓库内 `lib/` 即发布物，提交前请确认 `node --check` 与 `node --test` 均通过。
@@ -198,8 +198,8 @@ npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.2.1.tgz
 |---|---|
 | 标题显示「计划待审」，按钮显示「要求修改 / 同意执行」 | Web UI 用 `intent.kind='plan-review'` 套了自己的**本地化模板**，会替换插件传入的 header 与选项文案 |
 | 但 `af_plan_apply` 拿到的是 `authorized=true` | **回传给插件的仍是你传入的 approve label**，UI 只翻译显示、不改回传值——判定逻辑必须基于 canonical label，不能基于界面文字 |
-| 折叠态只显示 Markdown 的**前两行** | 所以第二行必须是关键数字（`26 项操作 · 移动 203 MiB · 跳过 1 组受保护（243 MiB）`），v0.2.1 已调整 |
-| digest 在折叠区内 | 需要点「查看全文」才能看到，符合"完整内容才承载可核对信息"的设计 |
+| 折叠态标题/摘要由客户端的 `extractMarkdownPlainText` 取**第一行/第一段** | 所以第 1 行是标题、第 2 行必须是关键数字（`26 项操作 · 移动 203 MiB · 跳过 1 组受保护（243 MiB）`） |
+| 「查看全文」打开的是侧栏文档；本机实测该面板**按原文显示**，不解析 Markdown | 所以正文改成无 Markdown 语法的纯文本排版（分隔线 + 缩进块 + 千分位），在原文显示和 GFM 渲染两种情况下都读得下去；digest 仍在正文里，需要展开才能看到 |
 
 实测对账：`skipped_bytes(254,407,380) + planned_bytes(213,372,998) = 467,780,378`，与 `af_duplicates` 的 `wasted_bytes` 总额完全相等——保护跳过与可执行量之间没有漏算。
 
