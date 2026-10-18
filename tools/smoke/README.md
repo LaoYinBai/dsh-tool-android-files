@@ -2,9 +2,10 @@
 
 `node tools/smoke/smoke.mjs` registers all six tools through the **actual
 `defineTool` schema compiler** from an installed DeepSeek Harness build, then
-drives a complete scan over a throwaway fixture. It is the only pre-device
-verification of the plugin contract; run it after any change to
-`lib/tools.js`.
+drives a complete scan over a throwaway fixture. Every returned value is
+validated against its own compiled output schema, because a stray field there
+turns a working call into an invalid one on device. It is the only pre-device
+verification of the plugin contract; run it after any change to `lib/tools.js`.
 
 It needs three tiny shim packages in `node_modules/` (gitignored, never
 shipped). The point of the shims is to load DSH's real schema compiler without
@@ -57,7 +58,13 @@ for (const { rel, entry } of walk(node, '')) {
 `node_modules/@deepseek-ai/dsh-tools/shim.js`:
 
 ```js
-export { defineTool, parameterSchemaSpecToJsonSchema, valueSchemaSpecToJsonSchema, validateArgs } from './lib/types/schema.js'
+export {
+  defineTool,
+  parameterSchemaSpecToJsonSchema,
+  valueSchemaSpecToJsonSchema,
+  validateArgs,
+} from './lib/types/schema.js'
+export { validateJsonSchemaValue } from './lib/types/json-schema.js'
 ```
 
 ## 3. Shims for the two leaf dependencies

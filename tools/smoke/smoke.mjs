@@ -72,37 +72,49 @@ const exec = () => ({
 })
 const byName = (name) => definitions.find((definition) => definition.name === name)
 
-const backend = await byName('af_backend').execute({}, exec())
+// The registry validates every returned value against the compiled output
+// schema; a stray field there breaks the whole call on device, so check it here.
+const { validateJsonSchemaValue } = await import('@deepseek-ai/dsh-tools')
+function call(name, args = {}) {
+  const definition = byName(name)
+  return definition.execute(args, exec()).then((value) => {
+    const violations = validateJsonSchemaValue(definition.output.schema, value, '')
+    assert.deepEqual(violations, [], `${name} output violates its schema: ${violations.join('; ')}`)
+    return value
+  })
+}
+
+const backend = await call('af_backend')
 assert.equal(backend.ok, true, `af_backend failed: ${backend.error}`)
 console.log('af_backend:', backend.platform, backend.node, backend.sqlite, backend.journal_mode)
 console.log(backend.roots_text)
 
-const scan = await byName('af_scan').execute({}, exec())
+const scan = await call('af_scan')
 assert.equal(scan.ok, true, `af_scan failed: ${scan.error}`)
 console.log('af_scan:', JSON.stringify(scan))
 assert.equal(scan.files, 10)
 assert.ok(scan.duplicate_groups >= 2)
 
-const report = await byName('af_scan_report').execute({}, exec())
+const report = await call('af_scan_report')
 assert.equal(report.ok, true)
 console.log('af_scan_report:', report.categories, '| dup groups', report.duplicate_groups, '| zero', report.zero_byte)
 
-const masked = await byName('af_files').execute({ limit: 3 }, exec())
+const masked = await call('af_files', { limit: 3 })
 assert.equal(masked.revealed, false)
 assert.ok(masked.items.every((item) => item.masked === true && item.rel_path.startsWith('#')))
 console.log('af_files (masked):', masked.items.map((item) => `${item.id}:${item.rel_path}`).join(', '))
 
-const revealed = await byName('af_files').execute({ limit: 3, reveal: true }, exec())
+const revealed = await call('af_files', { limit: 3, reveal: true })
 assert.ok(revealed.items.every((item) => item.masked === false))
 
-const duplicates = await byName('af_duplicates').execute({ reveal: true }, exec())
+const duplicates = await call('af_duplicates', { reveal: true })
 assert.ok(duplicates.groups >= 2, 'expected at least two duplicate groups')
 console.log('af_duplicates groups:', duplicates.groups)
 for (const group of duplicates.items) {
   console.log(` ${group.group_id} ${group.size}B x${group.count}:`, group.members.map((m) => m.rel_path).join(' | '))
 }
 
-const names = await byName('af_names').execute({ kind: 'numbered', limit: 20 }, exec())
+const names = await call('af_names', { kind: 'numbered', limit: 20 })
 assert.ok(names.items.some((item) => item.apk_verdict === 'apk-structure-ok'))
 assert.ok(names.items.some((item) => item.name === '工具.apk（1）' && item.canonical_name === '工具 (1).apk'))
 console.log('af_names:', names.total)
@@ -111,12 +123,12 @@ for (const item of names.items) {
 }
 
 // A path outside the configured root is refused, never silently allowed.
-const outside = await byName('af_scan').execute({ root: path.join(os.tmpdir(), 'somewhere-else') }, exec())
+const outside = await call('af_scan', { root: path.join(os.tmpdir(), 'somewhere-else') })
 assert.equal(outside.ok, false)
 assert.ok(outside.error.startsWith('AF_ROOT_NOT_ALLOWED'), outside.error)
 
 // Android/data is refused by policy.
-const denied = await byName('af_scan').execute({ root: '/storage/emulated/0/Android/data' }, exec())
+const denied = await call('af_scan', { root: '/storage/emulated/0/Android/data' })
 assert.equal(denied.ok, false)
 console.log('boundary refusals OK:', outside.error, '|', denied.error)
 
