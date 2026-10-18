@@ -255,3 +255,73 @@ test('the space verdict refuses a run that cannot fit and allows one that does',
   assert.equal(spaceVerdict({ freeBytes: null, neededBytes: 10 }).ok, true)
   assert.equal(spaceVerdict({ freeBytes: 0, neededBytes: 10 }).ok, true)
 })
+test('a partially executed plan can be rolled back with a restore plan', async () => {
+  const { dir, root, quarantineDir } = await fixture()
+  try {
+    const payload = Buffer.from('partial failure payload')
+    const a = path.join(root, 'a.bin')
+    const b = path.join(root, 'b.bin')
+    const c = path.join(root, 'c.bin')
+    for (const file of [a, b, c]) await fsp.writeFile(file, payload)
+    const members = [
+      await memberFor(1, a, root),
+      await memberFor(2, b, root),
+      await memberFor(3, c, root),
+    ]
+    const { store, plan } = await approvedPlan(dir, members, { root, quarantineDir })
+
+    // Block the first operation so the run ends in needs-review with one file moved.
+    const firstTarget = store.getPlan(plan.id).ops[0].dstPath
+    await fsp.mkdir(path.dirname(firstTarget), { recursive: true })
+    await fsp.writeFile(firstTarget, 'occupied')
+
+    const forward = await executePlan(store, plan, { quarantineDir })
+    assert.equal(forward.status, 'needs-review')
+    assert.equal(forward.failed, 1)
+    assert.equal(forward.committed, 1)
+
+    // Restore only what actually moved; the failed operation has nothing to undo.
+    const stored = store.getPlan(plan.id)
+    const opsById = new Map(stored.ops.map((op) => [op.opId, op]))
+    const entries = []
+    for (const row of store.listPlanOps(plan.id)) {
+      if (row.state !== 'source-removed') continue
+      const original = opsById.get(row.opId)
+      const copy = await memberFor(row.fileId, original.dstPath, path.dirname(original.dstPath))
+      entries.push({
+        fileId: row.fileId,
+        quarantinePath: original.dstPath,
+        originalPath: original.srcPath,
+        size: copy.size,
+        dev: copy.dev,
+        ino: copy.ino,
+        mtimeMs: copy.mtimeMs,
+        hash: copy.hash,
+      })
+    }
+    assert.equal(entries.length, 1, 'only the committed operation is restorable')
+
+    const restoreId = store.createPlan(stored.scanId, 'restore', RESTORE_POLICY, stored.id)
+    const built = buildRestorePlan(entries)
+    const digest = planDigest(restoreId, 'restore', built.policy, built.ops)
+    store.finalizePlan(restoreId, {
+      digest,
+      ops: built.ops,
+      keepCount: 0,
+      skippedGroups: 0,
+      skippedBytes: 0,
+      plannedBytes: built.plannedBytes,
+    })
+    assert.equal(store.approvePlan(restoreId, digest, 'test-call'), true)
+    const restored = await executePlan(store, store.getPlan(restoreId), { quarantineDir })
+    assert.equal(restored.status, 'committed')
+    assert.equal(restored.committed, 1)
+
+    // Every file is back, and the blocked target is still exactly what we wrote.
+    for (const file of [a, b, c]) assert.ok(await fsp.lstat(file), `${file} must exist again`)
+    assert.equal(await fsp.readFile(firstTarget, 'utf8'), 'occupied', 'the blocker is never touched')
+    store.raw.close()
+  } finally {
+    await fsp.rm(dir, { recursive: true, force: true, maxRetries: 2, retryDelay: 20 }).catch(() => {})
+  }
+})

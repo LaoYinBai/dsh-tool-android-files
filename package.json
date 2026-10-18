@@ -1,6 +1,6 @@
 {
   "name": "@laoyinbai/dsh-tool-android-files",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "description": "Android-first file organization tools for DeepSeek Harness (M1: read-only scan, classification, content dedupe, numbered-name analysis).",
   "type": "module",
   "main": "lib/index.js",
