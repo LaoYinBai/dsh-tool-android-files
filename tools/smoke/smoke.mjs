@@ -127,6 +127,9 @@ console.log(rendered.get('af_files'))
 
 const revealed = await call('af_files', { limit: 3, reveal: true })
 assert.ok(revealed.items.every((item) => item.masked === false))
+await call('af_files', { limit: 20 })
+assert.ok(!rendered.get('af_files').includes('family=iso'), 'masked output must not leak the split family name')
+assert.ok(rendered.get('af_files').includes('family=#'), 'masked output keeps an opaque family token for grouping')
 
 const duplicates = await call('af_duplicates', { reveal: true })
 assert.ok(duplicates.groups >= 2, 'expected at least two duplicate groups')

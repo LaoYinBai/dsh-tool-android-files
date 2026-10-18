@@ -1,6 +1,6 @@
 # @laoyinbai/dsh-tool-android-files
 
-面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `0.1.4`，处于 **M1：只读分析**，外加 M2 的写入能力探测。
+面向 **Android 版 DeepSeek Harness（DSH）** 的文件整理插件。当前版本 `0.1.5`，处于 **M1：只读分析**，外加 M2 的写入能力探测。
 
 M1 能做的事：把指定目录**索引**到手机本地 SQLite，做分类、内容级去重、自动编号文件名识别、APK 结构检查，
 然后以**聚合数字**的形式向模型汇报。**不会移动、重命名、删除任何用户文件。**
@@ -38,7 +38,7 @@ NODE="$HOME/payload/runtime/bin/node"
 
 # 方式 B：GitHub Release 预打包 tgz
 "$NODE" "$DSHBIN" plugin --profile web add \
-  https://github.com/LaoYinBai/dsh-tool-android-files/releases/download/v0.1.4/laoyinbai-dsh-tool-android-files-0.1.4.tgz
+  https://github.com/LaoYinBai/dsh-tool-android-files/releases/download/v0.1.5/laoyinbai-dsh-tool-android-files-0.1.5.tgz
 ```
 
 > 版本门禁：DSH 在加载前会校验 `peerDependencies` 里 `@deepseek-ai/dsh-*` 与运行时版本是否兼容。
@@ -94,8 +94,8 @@ rules:
 | `af_probe_write` | **会写临时文件** | 在插件数据目录与已配置的 `probeDir` 内测 `O_EXCL`/独占复制/硬链接/rename 是否覆盖/跨目录 rename/fsync/时间戳精度/剩余空间，测完自清理并报告残留。不碰用户文件。 |
 | `af_scan` | 仅索引库 | 扫描已配置根目录（或其中一个），入库并计算候选哈希。只读用户文件。 |
 | `af_scan_report` | 无 | 单次扫描的聚合报告：分类计数、重复统计、零字节、冲突、错误。**不含路径**。 |
-| `af_files` | 无 | 分页浏览索引条目。**默认遮蔽名称与路径**。 |
-| `af_duplicates` | 无 | 按 `大小 + SHA-256` 输出重复组。**默认遮蔽成员名**。 |
+| `af_files` | 无 | 分页浏览索引条目。**默认遮蔽名称与路径**；分卷家族名替换为 `family=#<hash8>` 短令牌。 |
+| `af_duplicates` | 无 | 按 `大小 + SHA-256` 输出重复组，并单列 `protected_groups` / `protected_bytes`。**默认遮蔽成员名**。 |
 | `af_names` | 无 | 自动编号文件名发现：`(1)`/`（1）` 位置、规范名候选、APK 结构检查结果、冲突/待确认标记。 |
 
 工具名使用 `af_` 前缀并保持裸标识符形式（`^[a-z][a-z0-9_]*$`），兼容 PTC 代码模式。
@@ -106,6 +106,7 @@ rules:
 - 索引（名称、路径、大小、哈希、关系）只存在手机本地 SQLite。
 - 默认返回值只含计数、分类与匿名 id。`af_files` / `af_duplicates` 的 `reveal` 默认 `false`；
   设为 `true` 表示**文件名与相对路径会随工具结果发送给云端模型**，只应在用户明确要求查看时使用。
+- 分卷家族名（`protection` 里的 `family=`）在遮蔽模式下替换为 8 位短 hash：既能跨行分组，又不泄露真实基名。
 - 错误信息只含错误码、路径相对形式与系统 errno，不含文件内容、不含任何凭据。
 
 ## 6. 安全边界
@@ -135,7 +136,7 @@ rules:
 ```sh
 node --test          # 44 个单元测试（不需要任何依赖）
 npm run check        # 全部 lib 文件语法检查
-npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.1.4.tgz
+npm pack             # 产物：laoyinbai-dsh-tool-android-files-0.1.5.tgz
 ```
 
 仓库内 `lib/` 即发布物，提交前请确认 `node --check` 与 `node --test` 均通过。

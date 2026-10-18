@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { classifyProtection, encodeProtection, isProtected } from '../lib/protect.js'
+import { classifyProtection, encodeProtection, isProtected, redactProtection } from '../lib/protect.js'
 
 test('in-progress downloads are protected', () => {
   for (const name of ['movie.mp4.part', 'iso.downloading', 'x.crdownload', 'a.tmp', 'b.aria2']) {
@@ -47,4 +47,19 @@ test('encodeProtection round-trips the family for storage', () => {
   assert.ok(encoded.includes('split'))
   assert.ok(encoded.includes('family=archive'))
   assert.equal(encodeProtection(classifyProtection('a.txt')), '')
+})
+
+test('masking never leaks the family name', () => {
+  const encoded = encodeProtection(classifyProtection('云璃tellme卸甲.zip.001'))
+  const masked = redactProtection(encoded, false)
+  assert.ok(masked.startsWith('split;family=#'), masked)
+  assert.equal(masked.includes('云璃'), false, 'the real family name must not survive masking')
+  assert.equal(redactProtection(encoded, true), encoded, 'reveal returns the stored value')
+
+  // Same family, same token: grouping still works on the masked form.
+  const a = redactProtection(encodeProtection(classifyProtection('x.001')), false)
+  const b = redactProtection(encodeProtection(classifyProtection('x.002')), false)
+  assert.equal(a, b)
+  const c = redactProtection(encodeProtection(classifyProtection('y.001')), false)
+  assert.notEqual(a, c)
 })

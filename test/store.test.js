@@ -24,6 +24,7 @@ function row(name, size, extra = {}) {
     baseName: name,
     canonicalName: name,
     flags: extra.flags ?? [],
+    protection: extra.protection ?? '',
     apkVerdict: extra.apkVerdict ?? '',
     error: null,
   }
@@ -44,7 +45,7 @@ test('index persists scans, hashes and duplicate groups', async () => {
     const store = await openStore(dbPath)
     const scanId = store.startScan(['/storage/emulated/0/Download'])
     store.insertFiles(scanId, [
-      row('a.txt', 12),
+      row('a.txt', 12, { protection: 'split;family=a' }),
       row('b.txt', 12),
       row('c.bin', 12, { category: 'other' }),
       row('zero.txt', 0),
@@ -73,6 +74,8 @@ test('index persists scans, hashes and duplicate groups', async () => {
     assert.equal(dup.groups, 1)
     assert.equal(dup.files, 2)
     assert.equal(dup.zeroByte, 1)
+    assert.equal(dup.protectedGroups, 1, 'a group holding a protected member is not actionable')
+    assert.equal(dup.protectedBytes, 12)
 
     const page = store.duplicateGroups(scanId, { limit: 10, offset: 0 })
     assert.equal(page.total, 1)
