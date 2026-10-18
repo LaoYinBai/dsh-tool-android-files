@@ -3,6 +3,17 @@
 本文件记录面向用户的变更。版本遵循 `MAJOR.MINOR.PATCH`：MAJOR 表示计划格式或安全不变量变化，
 MINOR 表示新增操作类型或工具，PATCH 表示修复与文案。
 
+## 1.1.0
+
+首次发布到 npm，并改为 MIT 许可。
+
+- `license` 由 `UNLICENSED` 改为 `MIT`，新增 `LICENSE` 文件，版权人 `LaoYinBai`。
+- 补充 `repository` / `homepage` / `bugs` / `author` 与 `publishConfig.access=public`，
+  使 `npm publish` 无需额外参数即可发布为公开的 scoped 包。
+- 发布物包含 `CHANGELOG.md`。
+- 安装方式增加 npm 包名，与 git 安装并存。
+- 运行时行为与 1.0.1 完全一致。
+
 ## 1.0.0
 
 首个正式版本。四种计划模式：`dedupe`（去重隔离）、`archive`（按类别+月份归档）、
